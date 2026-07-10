@@ -1,0 +1,19 @@
+x-customizable-image: &customizable_image
+  build:
+    context: images/bench
+    args:
+      BASE_IMAGE: ${BASE_IMAGE:-frappe/bench}
+      BASE_TAG: ${BASE_TAG:-latest}
+  image: ${CUSTOM_IMAGE:-bench}:${CUSTOM_TAG:-latest}
+
+services:
+  configurator:
+    <<: *customizable_image
+    environment:
+      USERID: "${USERID:-1000}"
+      GROUPID: "${GROUPID:-1000}"
+  frappe:
+    <<: *customizable_image
+    environment:
+      USERID: "${USERID:-1000}"
+      GROUPID: "${GROUPID:-1000}"

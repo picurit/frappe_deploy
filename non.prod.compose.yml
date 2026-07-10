@@ -1,0 +1,67 @@
+x-customizable-image: &customizable_image
+  image: ${CUSTOM_IMAGE:-frappe/bench}:${CUSTOM_TAG:-latest}
+  pull_policy: "${PULL_POLICY:-never}"
+
+x-depends-on-configurator: &depends_on_configurator
+  depends_on:
+    configurator:
+      condition: service_completed_successfully
+
+x-frappe-defaults: &frappe_defaults
+  <<: [*depends_on_configurator, *customizable_image]
+  platform: linux/amd64 # TODO: Add support for other platforms
+  tty: true
+  volumes:
+    # Mount ONLY the submodule's `development/` folder (gitignored) instead of the whole
+    # `frappe_docker` submodule. Mounting the whole submodule leaks its `.git` pointer file
+    # (`gitdir: ../.git/modules/frappe_docker`) into `/workspace/.git`; that relative path is
+    # dangling inside the container, so every git command bench runs (e.g. `git ls-remote`
+    # during `bench init`) aborts with "fatal: not a git repository".
+    - workspace:/workspace/development:cached
+  working_dir: /workspace/development
+
+services:
+  configurator:
+    <<: *frappe_defaults
+    command:
+      - bash
+      - -c
+      - >
+        if [ ! -d "frappe-bench-15.52.0" ]; then
+        bench init 
+        --skip-redis-config-generation 
+        --frappe-branch v15.52.0  
+        --frappe-path https://github.com/frappe/frappe.git 
+        frappe-bench-15.52.0;
+        cd frappe-bench-15.52.0;
+        bench set-config -g db_host $$DB_HOST;
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        fi;
+    environment:
+      DB_HOST: ${DB_HOST:-}
+      DB_PORT: ${DB_PORT:-}
+      REDIS_CACHE: ${REDIS_CACHE:-}
+      REDIS_QUEUE: ${REDIS_QUEUE:-}
+    depends_on: {}
+
+  frappe:
+    <<: *frappe_defaults
+    command: sleep infinity
+    environment:
+      SHELL: /bin/bash
+    # NOTE: no `ports:` here on purpose. Compose file-merging can ADD to a list but never
+    # REMOVE entries, so any port published in this base would leak into every derived stack
+    # (including the Traefik/SSL one, bypassing TLS). Host publishing is opt-in:
+    #   - local dev  -> add `overrides/compose.local-ports.yml`
+    #   - remote/SSL -> add `overrides/compose.non-prod-https.yaml` (Traefik reaches the
+    #                   container over the docker network, no host ports needed)
+
+volumes:
+  workspace:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${PWD}/frappe_docker/development

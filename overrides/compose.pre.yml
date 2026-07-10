@@ -1,0 +1,11 @@
+x-customizable-image: &customizable_image
+  restart: on-failure
+
+x-frappe-defaults: &frappe_defaults
+  <<: *customizable_image
+
+services:
+  configurator:
+    <<: *frappe_defaults
+  frappe:
+    <<: *frappe_defaults

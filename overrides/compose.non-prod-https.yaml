@@ -1,0 +1,66 @@
+# Remote non-prod dev over HTTPS, terminated by Traefik.
+#
+# The `frappe` service publishes NO host ports here — Traefik reaches the bench container over the
+# shared docker network using the `loadbalancer.server.port` labels below. Only the proxy binds
+# host 80/443. Do NOT combine this file with overrides/compose.local-ports.yml.
+#
+# Two routers are declared so Frappe works fully behind TLS:
+#   - frappe-web       -> container :8000  (site pages / API, matched by SITES_RULE)
+#   - frappe-socketio  -> container :9000  (realtime; SITES_RULE + PathPrefix `/socket.io`)
+# The socketio rule is strictly longer than the web rule, so Traefik's length-based priority
+# routes `/socket.io` to :9000 and everything else to :8000 without any explicit priority.
+#
+# Multi-site: put every hostname in SITES_RULE, e.g.
+#   SITES_RULE=Host(`a.example.com`) || Host(`b.example.com`)
+# Frappe resolves the site from the Host header, so all sites share :8000 — no per-site ports.
+#
+# Certificates: the ACME resolver below is production-ready (real Let's Encrypt certs on a server
+# that has a public IP + real DNS for SITES_RULE). On a workstation with no public IP / real domain,
+# HTTP-01 validation can't complete, so Traefik just serves its built-in self-signed cert — the
+# stack still comes up and is reachable over https:// (with a browser warning). Point ACME_CA_SERVER
+# at the Let's Encrypt staging directory while testing to avoid burning production rate limits.
+services:
+  frappe:
+    labels:
+      - traefik.enable=true
+      # --- web (site pages, REST/RPC) -> bench werkzeug on :8000 ---
+      - traefik.http.services.frappe-web.loadbalancer.server.port=8000
+      - traefik.http.routers.frappe-web.rule=${SITES_RULE:?SITES_RULE not set}
+      - traefik.http.routers.frappe-web.entrypoints=websecure
+      - traefik.http.routers.frappe-web.tls=true
+      - traefik.http.routers.frappe-web.tls.certresolver=main-resolver
+      - traefik.http.routers.frappe-web.service=frappe-web
+      # --- socketio (realtime) -> node socketio on :9000 ---
+      - traefik.http.services.frappe-socketio.loadbalancer.server.port=9000
+      - traefik.http.routers.frappe-socketio.rule=(${SITES_RULE:?SITES_RULE not set}) && PathPrefix(`/socket.io`)
+      - traefik.http.routers.frappe-socketio.entrypoints=websecure
+      - traefik.http.routers.frappe-socketio.tls=true
+      - traefik.http.routers.frappe-socketio.tls.certresolver=main-resolver
+      - traefik.http.routers.frappe-socketio.service=frappe-socketio
+
+  proxy:
+    image: traefik:v3.6
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      # Global HTTP -> HTTPS redirect (the ACME HTTP-01 challenge is still served before this).
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.main-resolver.acme.httpchallenge=true
+      - --certificatesresolvers.main-resolver.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.main-resolver.acme.email=${LETSENCRYPT_EMAIL:?No Let's Encrypt email set}
+      - --certificatesresolvers.main-resolver.acme.storage=/letsencrypt/acme.json
+      # Defaults to Let's Encrypt production; override with the staging directory while testing.
+      - --certificatesresolvers.main-resolver.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+    ports:
+      - ${HTTP_PUBLISH_PORT:-80}:80
+      - ${HTTPS_PUBLISH_PORT:-443}:443
+    volumes:
+      - cert-data:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+volumes:
+  cert-data:
