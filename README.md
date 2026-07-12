@@ -10,7 +10,7 @@ A custom bench image (`images/bench/`) extends the upstream `frappe/bench` image
 
 ## Prerequisites
 
-- **Docker Engine 24+** with the Compose v2 plugin (`docker compose` — not the legacy `docker-compose`)
+- **Docker Engine** with the Compose v2 plugin `docker compose` or the legacy `docker-compose`
 - **Git** (needed to clone the repository and initialize the `frappe_docker` submodule)
 - Approximately **2 GB of free disk** for the bench image and initial bench dependencies
 
@@ -19,7 +19,7 @@ A custom bench image (`images/bench/`) extends the upstream `frappe/bench` image
 **1. Clone the repository with submodules:**
 
 ```bash
-git clone --recurse-submodules <repository-url>
+git clone --recurse-submodules https://github.com/picurit/frappe_deploy.git
 cd frappe_deploy
 ```
 
