@@ -8,15 +8,15 @@
 #   - etc.
 #
 # This template is copied to create each bench's config:
-#   cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
-#   cp devops/traefik/example.bench.yml devops/traefik/bench-01.yml
-#   cp devops/traefik/example.bench.yml devops/traefik/bench-02.yml
+#   cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
+#   cp templates/traefik/example.bench.yml devops/traefik/bench-01.yml
+#   cp templates/traefik/example.bench.yml devops/traefik/bench-02.yml
 #
 # HOW TO USE THIS TEMPLATE
 #   1. Copy this file to a real one Traefik will load (e.g., bench-00.yml, bench-01.yml, etc.):
-#      cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
-#      (Traefik loads *.yml / *.yaml / *.toml from /etc/traefik/dynamic and ignores everything else,
-#       which is why the `example.*` template sits here inert — see .gitignore.)
+#      cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
+#      (Traefik loads *.yml / *.yaml / *.toml from /etc/traefik/dynamic and ignores everything else;
+#       keeping this template out of devops/traefik/ means it never gets picked up by mistake.)
 #   2. In the new file:
 #      - Replace `b.example.com` with the bench's real hostname
 #      - Replace `8000` / `9000` with the bench's actual web/socketio ports

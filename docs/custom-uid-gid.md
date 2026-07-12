@@ -66,15 +66,15 @@ docker compose \
   -f non.prod.compose.yml \
   -f frappe_docker/overrides/compose.mariadb.yaml \
   -f frappe_docker/overrides/compose.redis.yaml \
-  -f overrides/compose.uid-gid.yml \
-  -f overrides/compose.local-ports.yml \
-  -f overrides/compose.dev.yml \
-  config > devops/dev.docker-compose.yml
+  -f templates/docker/compose.uid-gid.yml \
+  -f templates/docker/compose.local-ports.yml \
+  -f templates/docker/compose.dev.yml \
+  config > devops/docker/dev.docker-compose.yml
 ```
 
 ### Without custom UID/GID (default 1000:1000)
 
-If your host user is UID 1000, skip the custom image build and omit `compose.uid-gid.yml` from the merge command. The Compose files will reference the upstream `frappe/bench:latest` image directly.
+If your host user is UID 1000, skip the custom image build and omit `templates/docker/compose.uid-gid.yml` from the merge command. The Compose files will reference the upstream `frappe/bench:latest` image directly.
 
 ## How the override works
 

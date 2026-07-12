@@ -1,8 +1,8 @@
-# devops/ holds every per-deployment file: rendered Compose files and real Traefik dynamic
-# config (devops/traefik/bench-00.yml, etc.). Only the example.* templates are tracked; everything
-# else is local to the checkout, same pattern as .env below.
+# devops/ holds every per-deployment file: rendered Compose files (devops/docker/) and real
+# Traefik dynamic config (devops/traefik/bench-00.yml, etc.). All of it is local to the checkout,
+# same pattern as .env below. Only .gitkeep is tracked, to keep the empty directory structure.
 devops/**
 !devops/**/
-!devops/**/example.*
+!devops/**/.gitkeep
 
 .env

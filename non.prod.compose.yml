@@ -54,8 +54,8 @@ services:
     # NOTE: no `ports:` here on purpose. Compose file-merging can ADD to a list but never
     # REMOVE entries, so any port published in this base would leak into every derived stack
     # (including the Traefik/SSL one, bypassing TLS). Host publishing is opt-in:
-    #   - local dev  -> add `overrides/compose.local-ports.yml`
-    #   - remote/SSL -> add `overrides/compose.non-prod-https.yaml` (Traefik reaches the
+    #   - local dev  -> add `templates/docker/compose.local-ports.yml`
+    #   - remote/SSL -> add `templates/docker/compose.non-prod-https.yaml` (Traefik reaches the
     #                   container over the docker network, no host ports needed)
 
 volumes:

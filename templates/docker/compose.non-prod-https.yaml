@@ -7,10 +7,10 @@
 #
 # The `frappe` service publishes NO host ports here — Traefik reaches it over the shared docker
 # network by container name (`http://frappe:<port>`). Only the proxy binds host 80/443.
-# Do NOT combine this file with overrides/compose.local-ports.yml.
+# Do NOT combine this file with templates/docker/compose.local-ports.yml.
 #
 # REQUIRED SETUP STEP (do this once per checkout, before `up`):
-#   cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
+#   cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
 # Then edit the file to set your hostname and bench ports. This is the exact same pattern as `.env`
 # and `example.env` — a template you copy and customize for your deployment. Every bench (bench 0,
 # 1, 2, ...) uses the same template; bench 0 is just copied with a `bench-00` name for sorting.
@@ -20,7 +20,7 @@
 # Frappe resolves the site from the Host header, so all sites share one port — no per-site config.
 #
 # Multi-BENCH (several benches, each on its own port + domain): add one file per extra bench under
-# `devops/traefik/` from the `example.bench.yml` template following the bench-XX.yml naming
+# `devops/traefik/` from the `templates/traefik/example.bench.yml` template following the bench-XX.yml naming
 # convention (bench-00.yml, bench-01.yml, bench-02.yml, ...). See docs/traefik-ssl.md. Each bench is
 # its own router+service pair mapping domain → http://frappe:<port>. A port RANGE would NOT work
 # here: Traefik routes by Host/path rule and load-balances a service's servers, so a range would
@@ -56,7 +56,7 @@ services:
     volumes:
       - cert-data:/letsencrypt
       # Dynamic config: all benches (bench-00.yml, bench-01.yml, etc.). Read-only; Traefik only needs to read these.
-      # See devops/traefik/example.bench.yml (template for all benches following bench-XX.yml convention).
+      # See templates/traefik/example.bench.yml (template for all benches following bench-XX.yml convention).
       - ${PWD}/devops/traefik:/etc/traefik/dynamic:ro
 
 volumes:

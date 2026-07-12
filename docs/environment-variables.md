@@ -10,7 +10,7 @@ Below is the complete reference.
 
 ## Runtime UID/GID
 
-Used by `overrides/compose.uid-gid.yml` and the custom bench entrypoint.
+Used by `templates/docker/compose.uid-gid.yml` and the custom bench entrypoint.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -23,7 +23,7 @@ If both values match the image defaults (1000:1000), the entrypoint skips remapp
 
 Ports the bench dev server (`bench start`) binds **inside** the container. These variables are shared by **both** the local-ports override and the Traefik/SSL override so the two stacks never drift.
 
-Used by `overrides/compose.local-ports.yml` and `overrides/compose.non-prod-https.yaml`.
+Used by `templates/docker/compose.local-ports.yml` and `templates/docker/compose.non-prod-https.yaml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -39,7 +39,7 @@ Used by `overrides/compose.local-ports.yml` and `overrides/compose.non-prod-http
 
 ## Local host ports
 
-Used by `overrides/compose.local-ports.yml`.
+Used by `templates/docker/compose.local-ports.yml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -49,7 +49,7 @@ Only the bind address changes here; the published range itself is controlled by 
 
 ## HTTPS / Traefik
 
-Used by `overrides/compose.non-prod-https.yaml`.
+Used by `templates/docker/compose.non-prod-https.yaml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -62,7 +62,7 @@ Used by `overrides/compose.non-prod-https.yaml`.
 
 ## Custom image tags
 
-Used by `non.prod.compose.yml` and `overrides/compose.uid-gid.yml`.
+Used by `non.prod.compose.yml` and `templates/docker/compose.uid-gid.yml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -97,7 +97,7 @@ FRAPPE_SOCKETIO_PORT=9000
 FRAPPE_WEB_PORT_LAST=8005
 FRAPPE_SOCKETIO_PORT_LAST=9005
 
-# Local dev — bind to loopback only (overrides/compose.local-ports.yml)
+# Local dev — bind to loopback only (templates/docker/compose.local-ports.yml)
 HOST_BIND=127.0.0.1
 
 # HTTPS / Traefik — only needed with compose.non-prod-https.yaml

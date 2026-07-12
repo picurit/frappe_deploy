@@ -1,8 +1,8 @@
 # Frappe Deploy
 
-A Docker-based deployment toolkit for [Frappe Framework](https://frappeframework.com/). That provides small, composable override fragments that you layer together to produce exactly the environment you need, local development with open ports, remote development behind HTTPS, or pre-production with automatic restarts.
+A Docker-based deployment toolkit for [Frappe Framework](https://frappeframework.com/). Each target environment — local development with open ports, remote development behind HTTPS, or pre-production with automatic restarts — is built by merging a base Compose file with small, composable fragments from `templates/`.
 
-Each target environment is built by merging a base Compose file with a curated set of overrides. The final rendered file lands in the `devops/` directory, along with any per-deployment config (like Traefik routing files). Everything in `devops/` is git-ignored except its `example.*` templates, keeping generated artifacts and local config out of version control while preserving a single source of truth for every configuration variant.
+The final rendered file lands in `devops/docker/`, along with any per-deployment config (like Traefik routing files in `devops/traefik/`). Everything in `devops/` is git-ignored except `.gitkeep` placeholders, keeping generated artifacts and local config out of version control while preserving a single source of truth for every configuration variant.
 
 A custom bench image (`images/bench/`) extends the upstream `frappe/bench` image to support runtime UID/GID remapping, so bind-mounted volumes stay writable regardless of the host user's numeric IDs — no more chown'ing directories to 1000:1000.
 
@@ -57,18 +57,18 @@ docker compose \
   -f non.prod.compose.yml \
   -f frappe_docker/overrides/compose.mariadb.yaml \
   -f frappe_docker/overrides/compose.redis.yaml \
-  -f overrides/compose.uid-gid.yml \
-  -f overrides/compose.local-ports.yml \
-  -f overrides/compose.dev.yml \
-  config > devops/dev.docker-compose.yml
+  -f templates/docker/compose.uid-gid.yml \
+  -f templates/docker/compose.local-ports.yml \
+  -f templates/docker/compose.dev.yml \
+  config > devops/docker/dev.docker-compose.yml
 
-docker compose -f devops/dev.docker-compose.yml up -d
+docker compose -f devops/docker/dev.docker-compose.yml up -d
 ```
 
 **5. Open a shell inside the bench container and start the dev server:**
 
 ```bash
-docker compose -f devops/dev.docker-compose.yml exec frappe bash
+docker compose -f devops/docker/dev.docker-compose.yml exec frappe bash
 bench start
 ```
 
@@ -88,11 +88,11 @@ That's it for `.env`. Hostnames and bench ports are configured in the Traefik dy
 
 **5. Create and configure the first bench's Traefik routing file:**
 
-This is like creating `.env` from `example.env` — a per-deployment file that's tracked as a template but gitignored once you copy it. The template is `devops/traefik/example.bench.yml` — **every bench uses the same template**, whether it's bench 0, 1, or 2. Just copy it with a `bench-00` name for sorting:
+This is like creating `.env` from `example.env` — a per-deployment file that's gitignored, created by copying a tracked template. The template is `templates/traefik/example.bench.yml` — **every bench uses the same template**, whether it's bench 0, 1, or 2. Just copy it with a `bench-00` name for sorting:
 
 ```bash
 # Copy the template to create the first bench's config
-cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
+cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
 
 # Edit the file and fill in:
 # - Your hostname: change Host(`b.example.com`) to your real domain
@@ -113,24 +113,24 @@ docker compose \
   -f non.prod.compose.yml \
   -f frappe_docker/overrides/compose.mariadb.yaml \
   -f frappe_docker/overrides/compose.redis.yaml \
-  -f overrides/compose.non-prod-https.yaml \
-  -f overrides/compose.uid-gid.yml \
-  -f overrides/compose.dev.yml \
-  config > devops/dev-ssl.docker-compose.yml
+  -f templates/docker/compose.non-prod-https.yaml \
+  -f templates/docker/compose.uid-gid.yml \
+  -f templates/docker/compose.dev.yml \
+  config > devops/docker/dev-ssl.docker-compose.yml
 
-docker compose -f devops/dev-ssl.docker-compose.yml up -d
+docker compose -f devops/docker/dev-ssl.docker-compose.yml up -d
 ```
 
 **7. Open a shell inside the bench container and start the dev server:**
 
 ```bash
-docker compose -f devops/dev-ssl.docker-compose.yml exec frappe bash
+docker compose -f devops/docker/dev-ssl.docker-compose.yml exec frappe bash
 bench start
 ```
 
 The site is available at **https://dev.example.com** (or whatever hostname you set in step 5).
 
-**Adding more benches (team members' instances, e.g. bench 1 on ports 8001/9001, bench 2 on 8002/9002):** Add one file under `devops/traefik/` from `example.bench.yml` — no compose re-render, no restart. Example: `cp example.bench.yml bench-01.yml`, then edit it. See [Adding more benches](docs/traefik-ssl.md#adding-more-benches--devopstraefikbench-01yml-bench-02yml-etc) in the traefik docs.
+**Adding more benches (team members' instances, e.g. bench 1 on ports 8001/9001, bench 2 on 8002/9002):** Add one file under `devops/traefik/` from `templates/traefik/example.bench.yml` — no compose re-render, no restart. Example: `cp templates/traefik/example.bench.yml devops/traefik/bench-01.yml`, then edit it. See [Adding more benches](docs/traefik-ssl.md#adding-more-benches--devopstraefikbench-01yml-bench-02yml-etc) in the traefik docs.
 
 ---
 

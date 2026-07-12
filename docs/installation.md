@@ -90,7 +90,7 @@ If you are fine with the default UID/GID 1000:1000, you can skip this step and t
 
 ## Rendering a Compose file
 
-Each target environment has a specific `docker compose ... config` command that merges the base file with the right set of overrides. The rendered file is written to `devops/`.
+Each target environment has a specific `docker compose ... config` command that merges the base file with the right set of templates from `templates/docker/`. The rendered file is written to `devops/docker/`.
 
 ### Local development (open ports)
 
@@ -100,10 +100,10 @@ docker compose \
   -f non.prod.compose.yml \
   -f frappe_docker/overrides/compose.mariadb.yaml \
   -f frappe_docker/overrides/compose.redis.yaml \
-  -f overrides/compose.uid-gid.yml \
-  -f overrides/compose.local-ports.yml \
-  -f overrides/compose.dev.yml \
-  config > devops/dev.docker-compose.yml
+  -f templates/docker/compose.uid-gid.yml \
+  -f templates/docker/compose.local-ports.yml \
+  -f templates/docker/compose.dev.yml \
+  config > devops/docker/dev.docker-compose.yml
 ```
 
 ### Remote development (HTTPS/Traefik)
@@ -112,7 +112,7 @@ Requires `LETSENCRYPT_EMAIL` in `.env` and a routing configuration file `devops/
 
 ```bash
 # First, create the bench routing file (required step before rendering)
-cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
+cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
 # Then edit bench-00.yml with your hostname and bench ports
 
 # Then render the compose file
@@ -121,10 +121,10 @@ docker compose \
   -f non.prod.compose.yml \
   -f frappe_docker/overrides/compose.mariadb.yaml \
   -f frappe_docker/overrides/compose.redis.yaml \
-  -f overrides/compose.non-prod-https.yaml \
-  -f overrides/compose.uid-gid.yml \
-  -f overrides/compose.dev.yml \
-  config > devops/dev-ssl.docker-compose.yml
+  -f templates/docker/compose.non-prod-https.yaml \
+  -f templates/docker/compose.uid-gid.yml \
+  -f templates/docker/compose.dev.yml \
+  config > devops/docker/dev-ssl.docker-compose.yml
 ```
 
 ### Pre-production
@@ -135,8 +135,8 @@ docker compose \
   -f non.prod.compose.yml \
   -f frappe_docker/overrides/compose.mariadb.yaml \
   -f frappe_docker/overrides/compose.redis.yaml \
-  -f overrides/compose.pre.yml \
-  config > devops/pre.docker-compose.yml
+  -f templates/docker/compose.pre.yml \
+  config > devops/docker/pre.docker-compose.yml
 ```
 
 > **Important:** Always run the `config` command from the repository root so that `${PWD}`-based volume paths resolve correctly.
@@ -144,19 +144,19 @@ docker compose \
 ## Starting the stack
 
 ```bash
-docker compose -f devops/dev.docker-compose.yml up -d
+docker compose -f devops/docker/dev.docker-compose.yml up -d
 ```
 
 Wait for the `configurator` service to finish (it runs `bench init` on first boot — this can take a few minutes). You can watch progress with:
 
 ```bash
-docker compose -f devops/dev.docker-compose.yml logs -f configurator
+docker compose -f devops/docker/dev.docker-compose.yml logs -f configurator
 ```
 
 Once the configurator exits and the `frappe` service is running, open a shell:
 
 ```bash
-docker compose -f devops/dev.docker-compose.yml exec frappe bash
+docker compose -f devops/docker/dev.docker-compose.yml exec frappe bash
 ```
 
 Inside the container, start the development server:
@@ -169,7 +169,7 @@ The site is available at **http://localhost:8000** (or the port configured in yo
 
 ## Verifying the installation
 
-1. **Container health:** `docker compose -f devops/dev.docker-compose.yml ps` — all services should be `Up` or `Exited 0` (configurator).
+1. **Container health:** `docker compose -f devops/docker/dev.docker-compose.yml ps` — all services should be `Up` or `Exited 0` (configurator).
 2. **Bench version:** inside the container, run `bench version` to confirm Frappe is installed.
 3. **Browser:** navigate to `http://localhost:8000`. The Frappe/ERPNext setup wizard should appear.
 
@@ -179,6 +179,6 @@ The site is available at **http://localhost:8000** (or the port configured in yo
 |---------|--------------|-----|
 | `Permission denied` during `bench init` | UID/GID mismatch between host volume and container user | Set `USERID`/`GROUPID` in `.env` and rebuild with `compose.uid-gid.yml` |
 | `fatal: not a git repository: /workspace/../.git/modules/frappe_docker` | Submodule `.git` pointer leaking into the container | Ensure the volume mounts `frappe_docker/development/` (not the whole submodule) — this is already handled in `non.prod.compose.yml` |
-| All requests return 404 with HTTPS (Traefik) | Missing or misconfigured `devops/traefik/bench-00.yml` | Ensure `devops/traefik/bench-00.yml` exists (copy from `example.bench.yml`) and has the correct hostname and bench ports |
+| All requests return 404 with HTTPS (Traefik) | Missing or misconfigured `devops/traefik/bench-00.yml` | Ensure `devops/traefik/bench-00.yml` exists (copy from `templates/traefik/example.bench.yml`) and has the correct hostname and bench ports |
 | Traefik certificate warning in browser (HTTPS) | Normal on workstations without public IP | Traefik falls back to self-signed cert; add hostname to your hosts file or use real DNS + public IP to get trusted certs |
 | Configurator takes a long time | First run downloads Frappe source + Python dependencies | This is normal; subsequent starts skip `bench init` if the directory already exists |

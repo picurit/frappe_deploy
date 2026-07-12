@@ -4,7 +4,7 @@ This document covers setting up a remote development environment with TLS termin
 
 ## Overview
 
-The `overrides/compose.non-prod-https.yaml` override adds:
+The `templates/docker/compose.non-prod-https.yaml` override adds:
 
 1. **Traefik proxy service** — listens on ports 80/443, terminates TLS, routes traffic to bench containers over the Docker network.
 2. **Traefik's file provider** — routing is declared entirely in `devops/traefik/` YAML files, not Docker labels. Traefik hot-reloads that directory, so adding a bench never requires a restart.
@@ -14,7 +14,7 @@ No host ports are published on any bench container. Traefik reaches each one ove
 
 Because routing is file-based, Traefik never touches the Docker socket — there's no `/var/run/docker.sock` mount and no `--providers.docker` flag. That's a meaningful reduction in attack surface for a proxy that's meant to be internet-facing.
 
-> **Do not** combine this override with `compose.local-ports.yml`. The local-ports override publishes host ports that would bypass TLS.
+> **Do not** combine this override with `templates/docker/compose.local-ports.yml`. The local-ports override publishes host ports that would bypass TLS.
 
 ## Required `.env` variables
 
@@ -36,10 +36,10 @@ See [Environment Variables](environment-variables.md) for the full reference. **
 
 ## Required setup: create the first bench's routing file
 
-Before the first `up`, create the first bench's dynamic config file from the tracked template (this is per-deployment and gitignored, same pattern as `.env`). **Every bench uses the same template** (`example.bench.yml`) — the first bench is just a copy with a `bench-00` name for sorting:
+Before the first `up`, create the first bench's dynamic config file from the tracked template (this is per-deployment and gitignored, same pattern as `.env`). **Every bench uses the same template** (`templates/traefik/example.bench.yml`) — the first bench is just a copy with a `bench-00` name for sorting:
 
 ```bash
-cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
+cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
 ```
 
 Then edit the file and fill in:
@@ -75,12 +75,12 @@ docker compose \
   -f non.prod.compose.yml \
   -f frappe_docker/overrides/compose.mariadb.yaml \
   -f frappe_docker/overrides/compose.redis.yaml \
-  -f overrides/compose.non-prod-https.yaml \
-  -f overrides/compose.uid-gid.yml \
-  -f overrides/compose.dev.yml \
-  config > devops/dev-ssl.docker-compose.yml
+  -f templates/docker/compose.non-prod-https.yaml \
+  -f templates/docker/compose.uid-gid.yml \
+  -f templates/docker/compose.dev.yml \
+  config > devops/docker/dev-ssl.docker-compose.yml
 
-docker compose -f devops/dev-ssl.docker-compose.yml up -d
+docker compose -f devops/docker/dev-ssl.docker-compose.yml up -d
 ```
 
 ## How Traefik routing works
@@ -104,7 +104,7 @@ Two routers are declared (one YAML file):
 
 The `priority: 100` makes `bench0-socketio` always win over `bench0-web` for `/socket.io` requests.
 
-This file is a **literal, manually-edited YAML file** — no templating, no variable substitution. It's created by copying `example.bench.yml` and editing the hostname and ports. That's it. **Bench 0 is routed exactly like bench 1, bench 2, or any other bench — no special mechanism. The `bench-00` name is just the bench number, zero-padded for alphabetic sorting in the directory.**
+This file is a **literal, manually-edited YAML file** — no templating, no variable substitution. It's created by copying `templates/traefik/example.bench.yml` and editing the hostname and ports. That's it. **Bench 0 is routed exactly like bench 1, bench 2, or any other bench — no special mechanism. The `bench-00` name is just the bench number, zero-padded for alphabetic sorting in the directory.**
 
 Multiple **sites** in this one bench share the port — Frappe resolves the site from the `Host` header, so just list every hostname in the rule:
 
@@ -117,7 +117,7 @@ bench0-web:
 
 Traefik decides the backend **from the router's `Host`/path rule, never from the port**, and then load-balances across a service's `servers`. If one service were pointed at a range (`8000..8005`), each site's traffic would be spread across *every* bench and land on the wrong one most of the time. So "multiple benches behind TLS" is inherently **N distinct `domain → port` mappings**, one router+service pair per bench — never a range.
 
-Contrast with local dev (`compose.local-ports.yml`), where you address a bench *by port* (`localhost:8001`); there, publishing a range works perfectly because you pick the port yourself.
+Contrast with local dev (`templates/docker/compose.local-ports.yml`), where you address a bench *by port* (`localhost:8001`); there, publishing a range works perfectly because you pick the port yourself.
 
 ### Adding more benches — `devops/traefik/bench-01.yml`, `bench-02.yml`, etc.
 
@@ -126,8 +126,8 @@ Additional benches (bench 1, bench 2, ...) are added **without touching any comp
 1. Copy the template to a new file following the `bench-XX.yml` naming convention — one file per bench, so team members can add or remove their own bench independently:
 
    ```bash
-   cp devops/traefik/example.bench.yml devops/traefik/bench-01.yml  # bench 1
-   cp devops/traefik/example.bench.yml devops/traefik/bench-02.yml  # bench 2
+   cp templates/traefik/example.bench.yml devops/traefik/bench-01.yml  # bench 1
+   cp templates/traefik/example.bench.yml devops/traefik/bench-02.yml  # bench 2
    ```
 
 2. Edit the file (e.g., `bench-01.yml`): replace the placeholder hostname and ports with the bench's real values. Check its `sites/common_site_config.json` or the `bench start` console log.
@@ -161,9 +161,9 @@ Additional benches (bench 1, bench 2, ...) are added **without touching any comp
 
 5. To remove a bench, delete (or move out) its file — Traefik drops the routes on the next reload.
 
-This scales to any number of benches. Traefik loads every `*.yml` / `*.yaml` / `*.toml` under the directory and ignores everything else — including the `example.*` file — so the shipped template sits inert until copied. `certResolver: main-resolver` is the same ACME resolver used by all benches, so every bench gets real certs in production and the self-signed fallback offline, identically.
+This scales to any number of benches. Traefik loads every `*.yml` / `*.yaml` / `*.toml` under the directory and ignores everything else. The shipped template lives outside `devops/traefik/` (in `templates/traefik/`), so it never gets picked up by Traefik. `certResolver: main-resolver` is the same ACME resolver used by all benches, so every bench gets real certs in production and the self-signed fallback offline, identically.
 
-`devops/traefik/*.yml` and `*.yaml` are gitignored (only `example.bench.yml` is tracked), the same pattern as `.env`/`example.env` — each deployment's real routing is local to that checkout.
+`devops/traefik/*.yml` and `*.yaml` are gitignored, the same pattern as `.env`/`example.env` — each deployment's real routing is local to that checkout. The tracked template is `templates/traefik/example.bench.yml`.
 
 ## Certificate behavior by environment
 
