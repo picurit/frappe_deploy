@@ -58,7 +58,7 @@ If the file exists, the submodule is initialized correctly. If it is missing, re
 Copy the example and customize it:
 
 ```bash
-cp env.example .env
+cp example.env .env
 ```
 
 At minimum, set `USERID` and `GROUPID` to match your host user so that bind-mounted files remain writable inside the container:
@@ -108,9 +108,14 @@ docker compose \
 
 ### Remote development (HTTPS/Traefik)
 
-Requires `SITES_RULE` and `LETSENCRYPT_EMAIL` to be set in `.env`:
+Requires `LETSENCRYPT_EMAIL` in `.env` and a routing configuration file `devops/traefik/bench-00.yml` (see [Traefik / HTTPS](traefik-ssl.md) for setup):
 
 ```bash
+# First, create the bench routing file (required step before rendering)
+cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
+# Then edit bench-00.yml with your hostname and bench ports
+
+# Then render the compose file
 docker compose \
   --project-name dev-bench \
   -f non.prod.compose.yml \
@@ -174,5 +179,6 @@ The site is available at **http://localhost:8000** (or the port configured in yo
 |---------|--------------|-----|
 | `Permission denied` during `bench init` | UID/GID mismatch between host volume and container user | Set `USERID`/`GROUPID` in `.env` and rebuild with `compose.uid-gid.yml` |
 | `fatal: not a git repository: /workspace/../.git/modules/frappe_docker` | Submodule `.git` pointer leaking into the container | Ensure the volume mounts `frappe_docker/development/` (not the whole submodule) — this is already handled in `non.prod.compose.yml` |
-| `SITES_RULE not set` | `.env` missing required Traefik variable | Set `SITES_RULE=Host(\`your-domain.com\`)` in `.env` |
+| All requests return 404 with HTTPS (Traefik) | Missing or misconfigured `devops/traefik/bench-00.yml` | Ensure `devops/traefik/bench-00.yml` exists (copy from `example.bench.yml`) and has the correct hostname and bench ports |
+| Traefik certificate warning in browser (HTTPS) | Normal on workstations without public IP | Traefik falls back to self-signed cert; add hostname to your hosts file or use real DNS + public IP to get trusted certs |
 | Configurator takes a long time | First run downloads Frappe source + Python dependencies | This is normal; subsequent starts skip `bench init` if the directory already exists |

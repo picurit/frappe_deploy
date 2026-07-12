@@ -3,7 +3,7 @@
 All configuration is driven by a single `.env` file in the repository root. Copy the template:
 
 ```bash
-cp env.example .env
+cp example.env .env
 ```
 
 Below is the complete reference.
@@ -19,6 +19,24 @@ Used by `overrides/compose.uid-gid.yml` and the custom bench entrypoint.
 
 If both values match the image defaults (1000:1000), the entrypoint skips remapping entirely — no performance overhead.
 
+## Bench dev ports
+
+Ports the bench dev server (`bench start`) binds **inside** the container. These variables are shared by **both** the local-ports override and the Traefik/SSL override so the two stacks never drift.
+
+Used by `overrides/compose.local-ports.yml` and `overrides/compose.non-prod-https.yaml`.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FRAPPE_WEB_PORT` | `8000` | Web / werkzeug port. Low bound of the locally-published web range **and** the single port Traefik forwards to. |
+| `FRAPPE_SOCKETIO_PORT` | `9000` | Socketio (realtime) port. Low bound of the locally-published socketio range **and** the port Traefik forwards to. |
+| `FRAPPE_WEB_PORT_LAST` | `8005` | High bound of the locally-published web range (local-ports only). |
+| `FRAPPE_SOCKETIO_PORT_LAST` | `9005` | High bound of the locally-published socketio range (local-ports only). |
+
+`bench init` → `make_ports()` scans sibling benches in `/workspace/development` and assigns `max(existing)+1`, so a second bench lands on `8001/9001`, a third on `8002/9002`, and so on.
+
+- **Local:** the override publishes a **range** (`FRAPPE_WEB_PORT`..`FRAPPE_WEB_PORT_LAST`), so any bench in that range is reachable on the host with no reconfig.
+- **SSL:** these variables are NOT read by the compose override. Instead, they're documented here for reference to the local-ports scenario. For the SSL/Traefik scenario, hostnames and ports are configured directly in `devops/traefik/*.yml` files — see [Traefik / HTTPS](traefik-ssl.md).
+
 ## Local host ports
 
 Used by `overrides/compose.local-ports.yml`.
@@ -27,7 +45,7 @@ Used by `overrides/compose.local-ports.yml`.
 |----------|---------|-------------|
 | `HOST_BIND` | `127.0.0.1` | Network interface the bench ports bind to. Use `0.0.0.0` to expose to the LAN. |
 
-The published ports are always 8000-8005 (web) and 9000-9005 (socketio). Only the bind address changes.
+Only the bind address changes here; the published range itself is controlled by the `FRAPPE_*_PORT` variables above.
 
 ## HTTPS / Traefik
 
@@ -35,11 +53,12 @@ Used by `overrides/compose.non-prod-https.yaml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SITES_RULE` | *(required)* | Traefik router rule for hostname matching. Single site: `` Host(`erp.example.com`) ``. Multiple sites: `` Host(`a.example.com`) \|\| Host(`b.example.com`) ``. |
 | `LETSENCRYPT_EMAIL` | *(required)* | Email address for Let's Encrypt certificate notifications. Passed verbatim to the ACME resolver. |
 | `HTTP_PUBLISH_PORT` | `80` | Host port for Traefik's HTTP entrypoint. |
 | `HTTPS_PUBLISH_PORT` | `443` | Host port for Traefik's HTTPS entrypoint. |
 | `ACME_CA_SERVER` | `https://acme-v02.api.letsencrypt.org/directory` | ACME directory URL. Use the [staging URL](https://letsencrypt.org/docs/staging-environment/) (`https://acme-staging-v02.api.letsencrypt.org/directory`) while testing to avoid rate limits. |
+
+**Note:** hostnames and bench ports are NOT configured in `.env`. They're configured directly in `devops/traefik/*.yml` files — see [Traefik / HTTPS](traefik-ssl.md) for details.
 
 ## Custom image tags
 
@@ -72,13 +91,20 @@ These are typically resolved by Docker Compose service discovery (e.g. `db:3306`
 USERID=1001
 GROUPID=1001
 
-# Local dev — bind to loopback only
+# Bench dev ports (used by local-ports override; range supports bench's dynamic +1 allocation)
+FRAPPE_WEB_PORT=8000
+FRAPPE_SOCKETIO_PORT=9000
+FRAPPE_WEB_PORT_LAST=8005
+FRAPPE_SOCKETIO_PORT_LAST=9005
+
+# Local dev — bind to loopback only (overrides/compose.local-ports.yml)
 HOST_BIND=127.0.0.1
 
 # HTTPS / Traefik — only needed with compose.non-prod-https.yaml
-SITES_RULE=Host(`erp.example.com`)
 LETSENCRYPT_EMAIL=admin@example.com
 HTTP_PUBLISH_PORT=80
 HTTPS_PUBLISH_PORT=443
 ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory
 ```
+
+Hostnames and bench ports for the Traefik/HTTPS scenario are configured in `devops/traefik/` files, not `.env` — see [Traefik / HTTPS](traefik-ssl.md).

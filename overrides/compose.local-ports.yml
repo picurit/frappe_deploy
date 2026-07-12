@@ -1,17 +1,25 @@
 # Local host port publishing (opt-in) — for LOCAL dev only, never combine with the SSL override.
 #
 # Publishes the bench dev range straight to the host so you can hit the site without a proxy:
-#   web (bench start / werkzeug):  http://localhost:8000        (extra sites -> 8001..8005)
+#   web (bench start / werkzeug):  http://localhost:8000        (extra benches -> 8001..8005)
 #   socketio (realtime):           ws://localhost:9000          (9001..9005)
+#
+# The range bounds come from .env and are SHARED with the Traefik/SSL override so both stay in
+# sync (see FRAPPE_WEB_PORT / FRAPPE_SOCKETIO_PORT in example.env):
+#   - FRAPPE_WEB_PORT       -> low bound of the web range   (also the port Traefik forwards to)
+#   - FRAPPE_WEB_PORT_LAST  -> high bound of the web range
+#   - FRAPPE_SOCKETIO_PORT / FRAPPE_SOCKETIO_PORT_LAST -> same for the socketio range
+# Publishing a RANGE (not a single port) is what lets bench's make_ports() hand out 8001/9001,
+# 8002/9002, ... to additional benches in /workspace/development without touching this file.
 #
 # HOST_BIND defaults to 127.0.0.1 so the ports stay on loopback and are NOT exposed to the LAN.
 # Set HOST_BIND=0.0.0.0 in .env if you need to reach the bench from another device on your network.
 #
 # Multi-site note: Frappe multiplexes sites by the Host header on a single port, so several
 # sites are served on 8000 at once (e.g. http://site-a.localhost:8000, http://site-b.localhost:8000).
-# The extra 8001-8005 / 9001-9005 ports only matter if you run several `bench start` instances.
+# The extra 8001-8005 / 9001-9005 ports only matter if you run several benches at once.
 services:
   frappe:
     ports:
-      - "${HOST_BIND:-127.0.0.1}:8000-8005:8000-8005"
-      - "${HOST_BIND:-127.0.0.1}:9000-9005:9000-9005"
+      - "${HOST_BIND:-127.0.0.1}:${FRAPPE_WEB_PORT:-8000}-${FRAPPE_WEB_PORT_LAST:-8005}:${FRAPPE_WEB_PORT:-8000}-${FRAPPE_WEB_PORT_LAST:-8005}"
+      - "${HOST_BIND:-127.0.0.1}:${FRAPPE_SOCKETIO_PORT:-9000}-${FRAPPE_SOCKETIO_PORT_LAST:-9005}:${FRAPPE_SOCKETIO_PORT:-9000}-${FRAPPE_SOCKETIO_PORT_LAST:-9005}"

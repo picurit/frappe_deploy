@@ -7,7 +7,7 @@ This document explains how the Compose override layering works and how the proje
 ```
 frappe_deploy/
 ├── non.prod.compose.yml            # Base Compose for all non-production environments
-├── env.example                     # Template for .env
+├── example.env                     # Template for .env
 ├── .env                            # Your local overrides (git-ignored)
 ├── images/
 │   └── bench/
@@ -18,20 +18,24 @@ frappe_deploy/
 │   ├── compose.pre.yml             # Pre-production restart policy (restart: on-failure)
 │   ├── compose.local-ports.yml     # Publishes bench ports to the host (opt-in)
 │   ├── compose.uid-gid.yml         # Builds the custom bench image + sets USERID/GROUPID
-│   └── compose.non-prod-https.yaml # Traefik proxy + TLS labels for remote dev
+│   └── compose.non-prod-https.yaml # Traefik proxy + TLS for remote dev (file-provider routing)
 ├── frappe_docker/                  # Git submodule — upstream frappe_docker
 │   ├── overrides/
 │   │   ├── compose.mariadb.yaml    # MariaDB service
 │   │   ├── compose.redis.yaml      # Redis services (cache, queue, socketio)
 │   │   └── ...
 │   └── development/                # Bind-mounted into the bench container (gitignored)
-├── devops/                         # Rendered Compose files land here (git-ignored)
-│   ├── README.md
-│   ├── dev.docker-compose.yml
+├── devops/                         # All per-deployment output and config (git-ignored except example.* templates)
+│   ├── traefik/
+│   │   ├── example.bench.yml       # Template for all benches (bench-00.yml, bench-01.yml, bench-02.yml, ...)
+│   │   └── bench-00.yml            # Real per-deployment routing files (git-ignored)
+│   ├── dev.docker-compose.yml      # Rendered Compose files (git-ignored)
 │   ├── dev-ssl.docker-compose.yml
 │   └── pre.docker-compose.yml
 └── docs/                           # This documentation
 ```
+
+Everything under `devops/` other than `example.*` templates is git-ignored: rendered Compose files and real per-deployment Traefik routing files are local to each checkout, the same pattern as `.env`/`example.env`.
 
 ## Compose override layering
 
@@ -73,7 +77,7 @@ On subsequent boots, if the directory already exists, the configurator exits imm
 
 The main interactive service. It runs `sleep infinity` by default, keeping the container alive so you can `docker exec` into it and run `bench start`, `bench new-site`, etc.
 
-In the HTTPS variant, Traefik labels on this service route traffic to the correct internal ports (`:8000` for web, `:9000` for socketio).
+In the HTTPS variant, routing to this service is declared in `devops/traefik/bench-00.yml`, `bench-01.yml`, `bench-02.yml`, etc. — literal YAML files (no templating), created by copying the tracked template and editing them with hostnames and ports. See [Traefik / HTTPS](traefik-ssl.md) for details.
 
 ## Volume mounts
 

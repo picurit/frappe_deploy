@@ -1,0 +1,79 @@
+# Traefik dynamic config — for ANY bench behind this TLS proxy (bench 0, bench 1, bench 2, ...).
+#
+# NAMING CONVENTION (not a Traefik requirement, just a local organization choice):
+#   All bench files use the format bench-XX.yml, where XX is a two-digit bench number:
+#   - bench-00.yml  (bench 0, sorted first)
+#   - bench-01.yml  (bench 1)
+#   - bench-02.yml  (bench 2)
+#   - etc.
+#
+# This template is copied to create each bench's config:
+#   cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
+#   cp devops/traefik/example.bench.yml devops/traefik/bench-01.yml
+#   cp devops/traefik/example.bench.yml devops/traefik/bench-02.yml
+#
+# HOW TO USE THIS TEMPLATE
+#   1. Copy this file to a real one Traefik will load (e.g., bench-00.yml, bench-01.yml, etc.):
+#      cp devops/traefik/example.bench.yml devops/traefik/bench-00.yml
+#      (Traefik loads *.yml / *.yaml / *.toml from /etc/traefik/dynamic and ignores everything else,
+#       which is why the `example.*` template sits here inert — see .gitignore.)
+#   2. In the new file:
+#      - Replace `b.example.com` with the bench's real hostname
+#      - Replace `8000` / `9000` with the bench's actual web/socketio ports
+#        (check sites/common_site_config.json, or the container logs from `bench start`)
+#   3. Rename the router/service keys to match your bench number (the template defaults to bench 0,
+#      so `bench-00.yml` needs no renaming here):
+#      - For `bench-00.yml`:  bench0-web / bench0-socketio (no change needed)
+#      - For `bench-01.yml`:  `bench0-web` → `bench1-web`, `bench0-socketio` → `bench1-socketio`
+#      - For `bench-02.yml`:  `bench0-web` → `bench2-web`, `bench0-socketio` → `bench2-socketio`
+#   4. Save. Traefik was started with `--providers.file.watch=true`, so it picks up the new file
+#      automatically — no restart, no compose re-render, no fixed slot count.
+#   5. To remove a bench, delete its file (or move it out of the directory) — Traefik drops the
+#      routes on the next reload.
+#
+# WHY ONE ROUTER+SERVICE PAIR PER BENCH (not a port range):
+#   Traefik routes by the Host/path RULE, then load-balances across a service's `servers`. Pointing
+#   one service at a range (8000..8005) would round-robin every request across all benches, so a
+#   site would hit the wrong bench most of the time. Each bench therefore needs its own service
+#   (its port) and its own router (its domain). This scales to any number of benches.
+#
+# ROUTING NOTES:
+#   - Backends are reached by the compose service name `frappe` over the shared docker network
+#     (http://frappe:<port>) — the proxy publishes no bench host ports.
+#   - `certResolver: main-resolver` is the same ACME resolver defined on the proxy (static config),
+#     so these routers get real Let's Encrypt certs in production and the self-signed fallback offline.
+#   - The `*-socketio` rule is strictly longer than the `*-web` rule, so Traefik's length-based
+#     priority sends `/socket.io` to the socketio port and everything else to the web port. An
+#     explicit `priority:` is shown below to make that intent unmistakable.
+
+http:
+  routers:
+    # ---- bench (any bench — numbered 0, 1, 2, ...) ----
+    # Rename bench0-web/bench0-socketio to match your bench number:
+    # - bench-00.yml:  bench0-web / bench0-socketio (no change needed)
+    # - bench-01.yml:  bench0-web → bench1-web, bench0-socketio → bench1-socketio
+    # - bench-02.yml:  bench0-web → bench2-web, bench0-socketio → bench2-socketio
+    bench0-web:
+      rule: "Host(`b.example.com`)"        # ← replace with your hostname
+      entryPoints: [websecure]
+      service: bench0-web
+      tls:
+        certResolver: main-resolver
+
+    bench0-socketio:
+      rule: "Host(`b.example.com`) && PathPrefix(`/socket.io`)"   # ← same hostname here
+      entryPoints: [websecure]
+      service: bench0-socketio
+      priority: 100                        # win over bench0-web for /socket.io
+      tls:
+        certResolver: main-resolver
+
+  services:
+    bench0-web:
+      loadBalancer:
+        servers:
+          - url: "http://frappe:8000"      # ← replace 8000 with your web port
+    bench0-socketio:
+      loadBalancer:
+        servers:
+          - url: "http://frappe:9000"      # ← replace 9000 with your socketio port
