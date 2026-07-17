@@ -9,3 +9,7 @@ services:
     <<: *frappe_defaults
   frappe:
     <<: *frappe_defaults
+  db:
+    healthcheck:
+      start_period: 60s
+      retries: 10
