@@ -16,6 +16,23 @@ Because routing is file-based, Traefik never touches the Docker socket — there
 
 > **Do not** combine this override with `templates/docker/compose.local-ports.yml`. The local-ports override publishes host ports that would bypass TLS.
 
+## Traefik two-layer architecture
+
+Traefik separates configuration into two layers:
+
+| Layer | File | Loaded | Changes |
+|-------|------|--------|---------|
+| **Static** | `devops/traefik/traefik-static.yml` | Once at startup | Requires restart |
+| **Dynamic** | `devops/traefik/bench-XX.yml`, `extra-services-XX.yml` | Hot-reloaded | Automatic |
+
+**Static** defines HOW Traefik starts: entrypoints (ports), providers (where to find dynamic config), certificate resolvers.
+
+**Dynamic** defines WHAT Traefik routes: routers (domain → service), services (backend URLs).
+
+```
+Request → Static (port 443, TLS) → Dynamic (Host rule → service) → frappe:8000
+```
+
 ## Required `.env` variables
 
 At minimum, set these in your `.env`:
@@ -34,9 +51,48 @@ ACME_CA_SERVER=https://acme-v02.api.letsencrypt.org/directory
 
 See [Environment Variables](environment-variables.md) for the full reference. **Note:** hostnames and bench ports are NOT in `.env` — they're configured in the `devops/traefik/` files (see below).
 
-## Required setup: create the first bench's routing file
+## Required setup (do once per checkout)
 
-Before the first `up`, create the first bench's dynamic config file from the tracked template (this is per-deployment and gitignored, same pattern as `.env`). **Every bench uses the same template** (`templates/traefik/example.bench.yml`) — the first bench is just a copy with a `bench-00` name for sorting:
+### Step 1: Create the Traefik static config
+
+```bash
+cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
+```
+
+Then edit the file to match your deployment. The template uses Go template syntax for env var interpolation:
+
+```yaml
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+  vite:
+    address: ":{{ env "VITE_PORT" | default "8080" }}"
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+certificatesResolvers:
+  main-resolver:
+    acme:
+      httpChallenge:
+        entryPoint: web
+      email: {{ env "LETSENCRYPT_EMAIL" }}
+      storage: /letsencrypt/acme.json
+      caServer: {{ env "ACME_CA_SERVER" | default "https://acme-v02.api.letsencrypt.org/directory" }}
+```
+
+**Adding/removing entrypoints:** edit this file only. No compose re-render needed — restart the proxy container to pick up static changes.
+
+### Step 2: Create the first bench's routing file
 
 ```bash
 cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
@@ -78,19 +134,24 @@ docker compose \
   -f templates/docker/compose.non-prod-https.yaml \
   -f templates/docker/compose.uid-gid.yml \
   -f templates/docker/compose.dev.yml \
+  -f devops/compose.deploy-overrides.yml \
   config > devops/docker/dev-ssl.docker-compose.yml
 
 docker compose -f devops/docker/dev-ssl.docker-compose.yml up -d
 ```
+
+The `devops/compose.deploy-overrides.yml` file is optional and gitignored — it adds deployment-specific overrides like extra ports or entrypoints. See [Architecture](architecture.md) for details.
 
 ## How Traefik routing works
 
 Every bench — bench 0, 1, 2, ... — is routed through Traefik's **file provider**, reading from `devops/traefik/*.yml` (mounted read-only, watched for changes):
 
 ```yaml
-command:
-  - --providers.file.directory=/etc/traefik/dynamic
-  - --providers.file.watch=true
+# In traefik-static.yml
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
 ```
 
 ### Bench 0 — `devops/traefik/bench-00.yml`
@@ -165,6 +226,51 @@ This scales to any number of benches. Traefik loads every `*.yml` / `*.yaml` / `
 
 `devops/traefik/*.yml` and `*.yaml` are gitignored, the same pattern as `.env`/`example.env` — each deployment's real routing is local to that checkout. The tracked template is `templates/traefik/example.bench.yml`.
 
+### Adding extra services — `devops/traefik/extra-services-XX.yml`
+
+For services that need their own Traefik entrypoint (e.g., Vite dev server on port 8080):
+
+1. Ensure the entrypoint exists in `devops/traefik/traefik-static.yml`:
+
+   ```yaml
+   entryPoints:
+     vite:
+       address: ":{{ env "VITE_PORT" | default "8080" }}"
+   ```
+
+2. Create a dynamic routing file:
+
+   ```bash
+   cp templates/traefik/example.bench.yml devops/traefik/extra-services-00.yml
+   ```
+
+3. Edit the file to add the extra router:
+
+   ```yaml
+   http:
+     routers:
+       bench0-vite:
+         rule: "Host(`dev.example.com`)"
+         entryPoints: [vite]
+         service: bench0-vite
+         tls:
+           certResolver: main-resolver
+     services:
+       bench0-vite:
+         loadBalancer:
+           servers:
+             - url: "http://frappe:8080"
+   ```
+
+4. If publishing the port through the proxy, add it to `devops/compose.deploy-overrides.yml`:
+
+   ```yaml
+   services:
+     proxy:
+       ports:
+         - "${VITE_PORT:-8080}:8080"
+   ```
+
 ## Certificate behavior by environment
 
 ### Production (public IP + real DNS)
@@ -186,30 +292,3 @@ ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory
 ```
 
 Staging certificates are also self-signed (browser warning), but they do not count against production rate limits.
-
-## Traefik proxy configuration details
-
-The proxy service uses the official `traefik:v3.6` image with these key settings:
-
-```yaml
-command:
-  - --providers.file.directory=/etc/traefik/dynamic          # load all bench routes (bench-00.yml, bench-01.yml, ...)
-  - --providers.file.watch=true                               # hot-reload on file change
-  - --entrypoints.web.address=:80                              # HTTP listener
-  - --entrypoints.web.http.redirections.entrypoint.to=websecure   # redirect HTTP -> HTTPS
-  - --entrypoints.web.http.redirections.entrypoint.scheme=https
-  - --entrypoints.websecure.address=:443                       # HTTPS listener
-  - --certificatesresolvers.main-resolver.acme.httpchallenge=true
-  - --certificatesresolvers.main-resolver.acme.httpchallenge.entrypoint=web
-  - --certificatesresolvers.main-resolver.acme.email=${LETSENCRYPT_EMAIL}
-  - --certificatesresolvers.main-resolver.acme.storage=/letsencrypt/acme.json
-  - --certificatesresolvers.main-resolver.acme.caserver=${ACME_CA_SERVER}
-ports:
-  - ${HTTP_PUBLISH_PORT:-80}:80
-  - ${HTTPS_PUBLISH_PORT:-443}:443
-volumes:
-  - cert-data:/letsencrypt
-  - ${PWD}/devops/traefik:/etc/traefik/dynamic:ro          # all bench routes (bench-00.yml, bench-01.yml, ...)
-```
-
-No Docker socket mount, no `--providers.docker` flag — routing discovery doesn't depend on Docker at all, only on the contents of `devops/traefik/`. The `cert-data` volume persists ACME certificates across container restarts.

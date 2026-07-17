@@ -19,9 +19,11 @@ frappe_deploy/
 │   │   ├── compose.pre.yml             # Pre-production restart policy (restart: on-failure)
 │   │   ├── compose.local-ports.yml     # Publishes bench ports to the host (opt-in)
 │   │   ├── compose.uid-gid.yml         # Builds the custom bench image + sets USERID/GROUPID
-│   │   └── compose.non-prod-https.yaml # Traefik proxy + TLS for remote dev (file-provider routing)
+│   │   ├── compose.non-prod-https.yaml # Traefik proxy + TLS (configfile approach)
+│   │   └── compose.deploy-overrides.yml # Template for deployment-specific overrides
 │   └── traefik/
-│       └── example.bench.yml       # Template for all benches (bench-00.yml, bench-01.yml, bench-02.yml, ...)
+│       ├── example.bench.yml       # Template for dynamic routing (bench-00.yml, bench-01.yml, ...)
+│       └── example.static.yml      # Template for Traefik static config (traefik-static.yml)
 ├── frappe_docker/                  # Git submodule — upstream frappe_docker
 │   ├── overrides/
 │   │   ├── compose.mariadb.yaml    # MariaDB service
@@ -33,8 +35,10 @@ frappe_deploy/
 │   │   ├── dev.docker-compose.yml      # Rendered Compose files (git-ignored)
 │   │   ├── dev-ssl.docker-compose.yml
 │   │   └── pre.docker-compose.yml
-│   └── traefik/
-│       └── bench-00.yml            # Real per-deployment routing files (git-ignored)
+│   ├── traefik/
+│   │   ├── bench-00.yml            # Real per-deployment routing files (git-ignored)
+│   │   └── traefik-static.yml      # Per-deployment Traefik static config (git-ignored)
+│   └── compose.deploy-overrides.yml    # Per-deployment overrides (git-ignored)
 └── docs/                           # This documentation
 ```
 
@@ -55,6 +59,13 @@ non.prod.compose.yml                             ← base (services, volumes, wo
   = devops/docker/dev.docker-compose.yml          ← final, self-contained file
 ```
 
+For HTTPS deployments:
+
+```
+  + templates/docker/compose.non-prod-https.yaml  ← Traefik proxy + TLS
+  + devops/compose.deploy-overrides.yml            ← deployment-specific (Vite, extra ports)
+```
+
 ### Why this pattern?
 
 1. **Separation of concerns.** Each override handles one thing (database, cache, ports, TLS, UID remapping). You can swap or omit any of them without touching the others.
@@ -62,6 +73,27 @@ non.prod.compose.yml                             ← base (services, volumes, wo
 2. **Opt-in host ports.** Docker Compose file merging can **add** entries to a list (like `ports:`) but can never **remove** them. If the base file declared `ports: ["8000:8000"]`, every derived environment — including the Traefik/SSL one — would expose those ports, bypassing TLS. Instead, ports are absent from the base file and added only via `templates/docker/compose.local-ports.yml`.
 
 3. **No hand-editing generated files.** The `config` command produces a single file with absolute paths. Once rendered, it works from any working directory.
+
+## Traefik two-layer architecture
+
+Traefik separates configuration into two layers:
+
+| Layer | Files | Loaded | Changes |
+|-------|-------|--------|---------|
+| **Static** | `traefik-static.yml` | Once at startup | Requires restart |
+| **Dynamic** | `bench-XX.yml`, `extra-services-XX.yml` | Hot-reloaded | Automatic (watch) |
+
+**Static** defines HOW Traefik starts: ports, providers, certificate resolvers. Loaded via `--configFile`.
+
+**Dynamic** defines WHAT Traefik routes: routers (domain → service), services (backend URLs). Watched from `/etc/traefik/dynamic/`.
+
+```
+Request → Static (port 443, TLS) → Dynamic (Host rule → service) → frappe:8000
+```
+
+### Deployment-specific overrides
+
+`devops/compose.deploy-overrides.yml` is gitignored and contains per-deployment additions (extra ports, Vite entrypoint). It's added last in the compose command chain so it has highest priority. Docker Compose **replaces** lists like `command:` but **appends** lists like `ports:`.
 
 ## Services
 
