@@ -1,0 +1,68 @@
+# Traefik static configuration template.
+#
+# This file defines HOW Traefik starts: which ports to listen on, where to find
+# dynamic config (routers/services), and how to obtain TLS certificates.
+#
+# This is a TEMPLATE — copy it to devops/traefik/traefik-static.yml and customize
+# per deployment. The copy is gitignored (devops/**) and never committed.
+#
+# HOW TRAEFIK'S TWO-LAYER ARCHITECTURE WORKS:
+#   Layer 1 — Static (this file):
+#     Loaded once at startup via --configFile. Defines entrypoints, providers,
+#     certificate resolvers. Changes require a container restart.
+#
+#   Layer 2 — Dynamic (bench-XX.yml, extra-services-XX.yml):
+#     Hot-reloaded from /etc/traefik/dynamic/ (watched by the file provider).
+#     Defines routers, services, middlewares. Changes are picked up automatically.
+#
+# TEMPLATE SYNTAX:
+#   This file uses Go templates for environment variable interpolation.
+#   {{ env "VAR" }}         — reads VAR from container environment
+#   {{ env "VAR" | default "value" }} — reads VAR with a fallback
+#
+# SETUP:
+#   1. cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
+#   2. Edit the new file to match your deployment (ports, ACME settings, etc.)
+#   3. The compose override mounts it into the Traefik container:
+#      command: ["--configFile=/etc/traefik/static.yml"]
+#      volumes:
+#        - ${PWD}/devops/traefik/traefik-static.yml:/etc/traefik/static.yml:ro
+#
+# WHY CONFIGFILE INSTEAD OF CLI FLAGS:
+#   CLI flags (--entrypoints.web.address=:80, etc.) work but are verbose and
+#   must be repeated in full when overriding. With --configfile, Traefik reads
+#   everything from this YAML, and compose overrides only need to mount the file.
+
+# Entrypoints: which ports Traefik listens on and how they behave.
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    address: ":443"
+  # Vite dev server entrypoint — uncomment to enable.
+  # The Vite dev server uses port 8080 with a protocol-relative script tag,
+  # so the browser requests https://<site>:8080/@vite/client directly.
+  # vite:
+  #   address: ":{{ env "VITE_PORT" | default "8080" }}"
+
+# Providers: where Traefik finds dynamic configuration (routers, services).
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# Certificate resolver: Let's Encrypt via ACME HTTP-01 challenge.
+certificatesResolvers:
+  main-resolver:
+    acme:
+      httpChallenge:
+        entryPoint: web
+      email: {{ env "LETSENCRYPT_EMAIL" }}
+      storage: /letsencrypt/acme.json
+      # Defaults to Let's Encrypt production; override with staging while testing.
+      caServer: {{ env "ACME_CA_SERVER" | default "https://acme-v02.api.letsencrypt.org/directory" }}

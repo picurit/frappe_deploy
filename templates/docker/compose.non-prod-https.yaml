@@ -9,54 +9,33 @@
 # network by container name (`http://frappe:<port>`). Only the proxy binds host 80/443.
 # Do NOT combine this file with templates/docker/compose.local-ports.yml.
 #
-# REQUIRED SETUP STEP (do this once per checkout, before `up`):
-#   cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
-# Then edit the file to set your hostname and bench ports. This is the exact same pattern as `.env`
-# and `example.env` — a template you copy and customize for your deployment. Every bench (bench 0,
-# 1, 2, ...) uses the same template; bench 0 is just copied with a `bench-00` name for sorting.
+# REQUIRED SETUP STEPS (do once per checkout, before `up`):
+#   1. cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
+#   2. cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
+# Then edit both files to match your deployment. See docs/traefik-ssl.md for details.
 #
-# Multi-site (one bench, many domains): a bench's router rule can list multiple hostnames, e.g.
-#   rule: "Host(`a.example.com`) || Host(`b.example.com`)"
-# Frappe resolves the site from the Host header, so all sites share one port — no per-site config.
+# HOW IT WORKS:
+#   Traefik loads its static config from a YAML file (--configFile) instead of CLI flags.
+#   The static config (entrypoints, providers, certificates) lives in devops/traefik/traefik-static.yml.
+#   Dynamic config (routers, services) lives in devops/traefik/bench-XX.yml and is hot-reloaded.
+#   Adding/removing entrypoints only changes the static YAML — no compose re-render needed.
 #
-# Multi-BENCH (several benches, each on its own port + domain): add one file per extra bench under
-# `devops/traefik/` from the `templates/traefik/example.bench.yml` template following the bench-XX.yml naming
-# convention (bench-00.yml, bench-01.yml, bench-02.yml, ...). See docs/traefik-ssl.md. Each bench is
-# its own router+service pair mapping domain → http://frappe:<port>. A port RANGE would NOT work
-# here: Traefik routes by Host/path rule and load-balances a service's servers, so a range would
-# spray each site's traffic across every bench instead of picking the right one.
-#
-# Certificates: the ACME resolver below is production-ready (real Let's Encrypt certs on a server
-# that has a public IP + real DNS for your hostname). On a workstation with no public IP / real
-# domain, HTTP-01 validation can't complete, so Traefik just serves its built-in self-signed cert —
-# the stack still comes up and is reachable over https:// (with a browser warning). Point
-# ACME_CA_SERVER at the Let's Encrypt staging directory while testing to avoid burning rate limits.
+# CERTIFICATES: ACME resolver is production-ready (real Let's Encrypt certs on a server
+# with public IP + real DNS). Without public IP, Traefik serves self-signed certs (browser warning).
+# Set ACME_CA_SERVER to staging while testing to avoid burning rate limits.
 services:
   proxy:
     image: traefik:v3.6
     restart: unless-stopped
-    command:
-      # File provider: every router/service (bench 0, 1, 2, ...) is declared in these files.
-      - --providers.file.directory=/etc/traefik/dynamic
-      - --providers.file.watch=true
-      - --entrypoints.web.address=:80
-      # Global HTTP -> HTTPS redirect (the ACME HTTP-01 challenge is still served before this).
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.main-resolver.acme.httpchallenge=true
-      - --certificatesresolvers.main-resolver.acme.httpchallenge.entrypoint=web
-      - --certificatesresolvers.main-resolver.acme.email=${LETSENCRYPT_EMAIL:?No Let's Encrypt email set}
-      - --certificatesresolvers.main-resolver.acme.storage=/letsencrypt/acme.json
-      # Defaults to Let's Encrypt production; override with the staging directory while testing.
-      - --certificatesresolvers.main-resolver.acme.caserver=${ACME_CA_SERVER:-https://acme-v02.api.letsencrypt.org/directory}
+    command: ["--configFile=/etc/traefik/static.yml"]
     ports:
       - ${HTTP_PUBLISH_PORT:-80}:80
       - ${HTTPS_PUBLISH_PORT:-443}:443
     volumes:
       - cert-data:/letsencrypt
-      # Dynamic config: all benches (bench-00.yml, bench-01.yml, etc.). Read-only; Traefik only needs to read these.
-      # See templates/traefik/example.bench.yml (template for all benches following bench-XX.yml convention).
+      # Static config: entrypoints, providers, certificates. Restart required to reload.
+      - ${PWD}/devops/traefik/traefik-static.yml:/etc/traefik/static.yml:ro
+      # Dynamic config: bench routes (bench-00.yml, bench-01.yml, etc.). Hot-reloaded.
       - ${PWD}/devops/traefik:/etc/traefik/dynamic:ro
 
 volumes:
