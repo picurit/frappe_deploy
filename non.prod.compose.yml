@@ -1,3 +1,16 @@
+# Base compose for all non-prod environments (local dev and remote/SSL).
+#
+# OVERRIDE CHAIN (last wins for lists like command:, ports:):
+#   1. non.prod.compose.yml              ← THIS FILE (base)
+#   2. frappe_docker/overrides/*.yaml    (mariadb, redis)
+#   3. templates/docker/compose.*.yml    (https, uid-gid, dev, local-ports)
+#   4. devops/docker/deploy.overrides.yml (per-deployment, gitignored)
+#
+# The final merge is rendered by `docker compose config` into devops/docker/*.yml.
+# Deployment-specific overrides (extra ports, Traefik entrypoints, etc.) go in
+# devops/docker/deploy.overrides.yml — gitignored, not committed. See
+# templates/docker/compose.deploy-overrides.yml for the template and examples.
+
 x-customizable-image: &customizable_image
   image: ${CUSTOM_IMAGE:-frappe/bench}:${CUSTOM_TAG:-latest}
   pull_policy: "${PULL_POLICY:-never}"
@@ -11,6 +24,7 @@ x-frappe-defaults: &frappe_defaults
   <<: [*depends_on_configurator, *customizable_image]
   platform: linux/amd64 # TODO: Add support for other platforms
   tty: true
+  user: frappe
   volumes:
     # Mount ONLY the submodule's `development/` folder (gitignored) instead of the whole
     # `frappe_docker` submodule. Mounting the whole submodule leaks its `.git` pointer file

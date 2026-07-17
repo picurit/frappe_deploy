@@ -4,13 +4,29 @@
 # unmodified against host-mounted volumes owned by any UID/GID, without requiring a custom
 # build per host or chown'ing host directories to 1000:1000.
 #
-# Must run as root (see Dockerfile: USER root, ENTRYPOINT here) because usermod/groupmod and
-# re-owning files require root. Privileges are dropped via setpriv before "$@" runs.
+# Runs as the `frappe` user (USER frappe in Dockerfile, user: frappe in compose).
+# When started as non-root, re-executes itself as root via passwordless sudo so that
+# usermod/groupmod/chown/setpriv can run. Before dropping privileges, cleans up env vars
+# leaked by sudo -E (USER=root, LOGNAME=root, PATH=secure_path, SUDO_*=*) and restores
+# the correct identity so that tools like python-crontab and getpass.getuser() behave
+# as the frappe user.
 set -euo pipefail
 
 log() {
     echo "entrypoint: $*"
 }
+
+# ---------------------------------------------------------------------------
+# Non-root bootstrap: re-execute this script as root via sudo.
+# This runs BEFORE any usermod, so UID 1000 still exists in /etc/passwd and
+# sudo can authenticate the frappe user via its NOPASSWD sudoers rule.
+# sudo -E preserves all environment variables (USERID, GROUPID, HOME, DB_HOST,
+# etc.) through the re-execution.
+# ---------------------------------------------------------------------------
+if [ "$(id -u)" -ne 0 ]; then
+    log "running as uid=$(id -u), re-executing as root via sudo"
+    exec sudo -E "$0" "$@"
+fi
 
 TARGET_UID="${USERID:-1000}"
 TARGET_GID="${GROUPID:-1000}"
@@ -27,7 +43,23 @@ is_uint() {
     esac
 }
 
-log "starting entrypoint (USERID=$TARGET_UID GROUPID=$TARGET_GID)"
+# Clean up env vars injected by sudo -E and restore frappe identity.
+# sudo -E sets USER=root, LOGNAME=root and SUDO_*=* even though the process
+# will run as frappe after setpriv. It also replaces PATH with secure_path,
+# stripping pyenv/nvm/.local/bin. Python's getpass.getuser() picks up
+# USER/LOGNAME and would report "root", causing bench to write
+# frappe_user: root into common_site_config.json and crash when
+# python-crontab tries `crontab -u root -l` without root privileges.
+cleanup_env() {
+    unset USER LOGNAME SUDO_USER SUDO_UID SUDO_GID SUDO_COMMAND
+    export USER=frappe
+    export LOGNAME=frappe
+    # Restore full PATH including pyenv, nvm, and bench.
+    # Nvm version is detected dynamically from the base image.
+    export PATH="/home/frappe/.nvm/versions/node/$(ls /home/frappe/.nvm/versions/node/ | sort -V | tail -1)/bin:/home/frappe/.local/bin:/home/frappe/.pyenv/shims:/home/frappe/.pyenv/bin:$PATH"
+}
+
+log "starting entrypoint as root (USERID=$TARGET_UID GROUPID=$TARGET_GID)"
 
 is_uint "$TARGET_UID" || fail "USERID must be a positive integer, got '$TARGET_UID'"
 is_uint "$TARGET_GID" || fail "GROUPID must be a positive integer, got '$TARGET_GID'"
@@ -41,6 +73,7 @@ log "current frappe identity: UID=$CURRENT_UID GID=$CURRENT_GID"
 # root-only setup and go straight to running the command as frappe.
 if [ "$TARGET_UID" = "$CURRENT_UID" ] && [ "$TARGET_GID" = "$CURRENT_GID" ]; then
     log "UID/GID already match, skipping remap"
+    cleanup_env
     exec setpriv --reuid=frappe --regid=frappe --init-groups -- "$@"
 fi
 
@@ -80,10 +113,10 @@ log "updating user to frappe:$TARGET_GROUP UID=$TARGET_UID GID=$TARGET_GID"
 # trying to chown the home directory to the new UID/GID, this would be performed
 # by the next step using find/chown.
 DUMMY_HOME="/tmp/dummy_home_${HOME##*/}"
-mkdir -p $DUMMY_HOME
-sudo usermod -d $DUMMY_HOME frappe
+mkdir -p "$DUMMY_HOME"
+usermod -d "$DUMMY_HOME" frappe
 usermod -u "$TARGET_UID" -g "$TARGET_GROUP" frappe
-sudo usermod -d $HOME frappe
+usermod -d "$HOME" frappe
 
 log "scanning and updating filesystem ownership (this may take a moment)..."
 
@@ -98,6 +131,8 @@ log "scanning and updating filesystem ownership (this may take a moment)..."
     '
 
 log "filesystem re-ownership complete"
+
+cleanup_env
 
 log "dropping privileges to frappe:$TARGET_GROUP ($TARGET_UID:$TARGET_GID) and executing: $*"
 exec setpriv --reuid=frappe --regid="$TARGET_GROUP" --init-groups -- "$@"
