@@ -3,7 +3,7 @@
 # This file defines HOW Traefik starts: which ports to listen on, where to find
 # dynamic config (routers/services), and how to obtain TLS certificates.
 #
-# This is a TEMPLATE — copy it to devops/traefik/traefik-static.yml and edit
+# This is a TEMPLATE — copy it to devops/traefik-static.yml and edit
 # the placeholder values to match your deployment. The copy is gitignored (devops/**)
 # and never committed.
 #
@@ -12,18 +12,21 @@
 #   Edit the email, caServer, and entrypoints directly. No variable substitution.
 #
 # SETUP:
-#   1. cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
-#   2. Edit devops/traefik/traefik-static.yml (see placeholders below)
+#   1. cp templates/traefik/example.static.yml devops/traefik-static.yml
+#   2. Edit devops/traefik-static.yml (see placeholders below)
 #   3. The compose file mounts it via:
 #      command: ["--configFile=/etc/traefik/static.yml"]
 #
 # TWO-LAYER ARCHITECTURE:
-#   Layer 1 — Static (this file):
+#   Layer 1 — Static (this file → devops/traefik-static.yml):
 #     Loaded once at startup via --configFile. Defines entrypoints, providers,
 #     certificate resolvers. Changes require a container restart.
-#   Layer 2 — Dynamic (bench-XX.yml, extra-services-XX.yml):
+#   Layer 2 — Dynamic (devops/traefik/bench-XX.yml, extra-services-XX.yml):
 #     Hot-reloaded from /etc/traefik/dynamic/. Defines routers, services.
 #     Changes are picked up automatically (no restart).
+#
+# NOTE: This file lives at devops/traefik-static.yml (OUTSIDE the devops/traefik/
+# directory) so it is not picked up by Traefik's dynamic file provider.
 #
 # WHAT TO CHANGE MANUALLY:
 #   - email:            your Let's Encrypt email
@@ -60,12 +63,8 @@ certificatesResolvers:
     acme:
       httpChallenge:
         entryPoint: web
-      email: you@example.com
+      email: you@example.com               # CHANGE: your email
       storage: /letsencrypt/acme.json
       # Use staging while testing to avoid burning rate limits:
-      # caServer:
-      # https://acme-staging-v02.api.letsencrypt.org/directory
-      # production:
-      # https://acme-v02.api.letsencrypt.org/directory
-      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
-
+      # caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      caServer: https://acme-v02.api.letsencrypt.org/directory   # CHANGE if needed

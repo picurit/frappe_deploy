@@ -14,7 +14,7 @@
 #   - Per-deployment service overrides
 #
 # WHEN NOT TO USE:
-#   - Traefik entrypoints → edit devops/traefik/traefik-static.yml
+#   - Traefik entrypoints → edit devops/traefik-static.yml
 #   - Traefik routes → edit devops/traefik/bench-XX.yml (hot-reloaded)
 #   - Changes for ALL deployments → edit templates/docker/compose.*.yml
 #

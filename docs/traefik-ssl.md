@@ -22,7 +22,7 @@ Traefik separates configuration into two layers:
 
 | Layer | File | Loaded | Changes |
 |-------|------|--------|---------|
-| **Static** | `devops/traefik/traefik-static.yml` | Once at startup | Requires restart |
+| **Static** | `devops/traefik-static.yml` | Once at startup | Requires restart |
 | **Dynamic** | `devops/traefik/bench-XX.yml`, `extra-services-XX.yml` | Hot-reloaded | Automatic |
 
 **Static** defines HOW Traefik starts: entrypoints (ports), providers (where to find dynamic config), certificate resolvers.
@@ -40,14 +40,14 @@ HTTP_PUBLISH_PORT=80      # optional, default 80
 HTTPS_PUBLISH_PORT=443    # optional, default 443
 ```
 
-See [Environment Variables](environment-variables.md) for the full reference. Traefik-specific settings (`email`, `caServer`, entrypoints) are configured in `devops/traefik/traefik-static.yml` (see below), not in `.env`.
+See [Environment Variables](environment-variables.md) for the full reference. Traefik-specific settings (`email`, `caServer`, entrypoints) are configured in `devops/traefik-static.yml` (see below), not in `.env`.
 
 ## Required setup (do once per checkout)
 
 ### Step 1: Create the Traefik static config
 
 ```bash
-cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
+cp templates/traefik/example.static.yml devops/traefik-static.yml
 ```
 
 Then edit the file to match your deployment. This is a per-deployment file (gitignored), then edit directly, like `.env`:
@@ -221,7 +221,7 @@ This scales to any number of benches. Traefik loads every `*.yml` / `*.yaml` / `
 
 For services that need their own Traefik entrypoint (e.g., Vite dev server on port 8080):
 
-1. Ensure the entrypoint exists in `devops/traefik/traefik-static.yml`:
+1. Ensure the entrypoint exists in `devops/traefik-static.yml`:
 
    ```yaml
    entryPoints:

@@ -36,8 +36,8 @@ frappe_deploy/
 │   │   ├── dev-ssl.docker-compose.yml
 │   │   └── pre.docker-compose.yml
 │   ├── traefik/
-│   │   ├── bench-00.yml            # Real per-deployment routing files (git-ignored)
-│   │   └── traefik-static.yml      # Per-deployment Traefik static config (git-ignored)
+│   │   └── bench-00.yml            # Real per-deployment routing files (git-ignored)
+│   ├── traefik-static.yml          # Per-deployment Traefik static config (git-ignored)
 │   └── compose.deploy-overrides.yml    # Per-deployment overrides (git-ignored)
 └── docs/                           # This documentation
 ```

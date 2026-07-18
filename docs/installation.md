@@ -108,11 +108,11 @@ docker compose \
 
 ### Remote development (HTTPS/Traefik)
 
-Requires a static config file `devops/traefik/traefik-static.yml` and a routing file `devops/traefik/bench-00.yml` (see [Traefik / HTTPS](traefik-ssl.md) for setup):
+Requires a static config file `devops/traefik-static.yml` and a routing file `devops/traefik/bench-00.yml` (see [Traefik / HTTPS](traefik-ssl.md) for setup):
 
 ```bash
 # First, create the Traefik static config and bench routing file
-cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
+cp templates/traefik/example.static.yml devops/traefik-static.yml
 cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
 # Then edit both files with your email, hostname, and ports
 

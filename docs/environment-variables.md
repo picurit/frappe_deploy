@@ -56,7 +56,7 @@ Used by `templates/docker/compose.non-prod-https.yaml`.
 | `HTTP_PUBLISH_PORT` | `80` | Host port for Traefik's HTTP entrypoint. |
 | `HTTPS_PUBLISH_PORT` | `443` | Host port for Traefik's HTTPS entrypoint. |
 
-**Note:** `letsencrypt_email`, `caServer`, entrypoints, and ACME settings are configured in `devops/traefik/traefik-static.yml` (plain YAML, no templating) — see [Traefik / HTTPS](traefik-ssl.md). Hostnames and bench ports are configured in `devops/traefik/bench-XX.yml`.
+**Note:** `letsencrypt_email`, `caServer`, entrypoints, and ACME settings are configured in `devops/traefik-static.yml` (plain YAML, no templating) — see [Traefik / HTTPS](traefik-ssl.md). Hostnames and bench ports are configured in `devops/traefik/bench-XX.yml`.
 
 ## Custom image tags
 
@@ -103,4 +103,4 @@ HTTP_PUBLISH_PORT=80
 HTTPS_PUBLISH_PORT=443
 ```
 
-Traefik-specific settings (`letsencrypt_email`, `caServer`, entrypoints) are configured in `devops/traefik/traefik-static.yml` — see [Traefik / HTTPS](traefik-ssl.md).
+Traefik-specific settings (`letsencrypt_email`, `caServer`, entrypoints) are configured in `devops/traefik-static.yml` — see [Traefik / HTTPS](traefik-ssl.md).

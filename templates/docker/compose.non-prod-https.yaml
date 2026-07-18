@@ -10,13 +10,13 @@
 # Do NOT combine this file with templates/docker/compose.local-ports.yml.
 #
 # REQUIRED SETUP STEPS (do once per checkout, before `up`):
-#   1. cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
+#   1. cp templates/traefik/example.static.yml devops/traefik-static.yml
 #   2. cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
 # Then edit both files to match your deployment. See docs/traefik-ssl.md for details.
 #
 # HOW IT WORKS:
 #   Traefik loads its static config from a YAML file (--configFile) instead of CLI flags.
-#   The static config (entrypoints, providers, certificates) lives in devops/traefik/traefik-static.yml.
+#   The static config (entrypoints, providers, certificates) lives in devops/traefik-static.yml.
 #   Dynamic config (routers, services) lives in devops/traefik/bench-XX.yml and is hot-reloaded.
 #   Adding/removing entrypoints only changes the static YAML — no compose re-render needed.
 #
@@ -34,7 +34,7 @@ services:
     volumes:
       - cert-data:/letsencrypt
       # Static config: entrypoints, providers, certificates. Restart required to reload.
-      - ${PWD}/devops/traefik/traefik-static.yml:/etc/traefik/static.yml:ro
+      - ${PWD}/devops/traefik-static.yml:/etc/traefik/static.yml:ro
       # Dynamic config: bench routes (bench-00.yml, bench-01.yml, etc.). Hot-reloaded.
       - ${PWD}/devops/traefik:/etc/traefik/dynamic:ro
 
