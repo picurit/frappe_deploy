@@ -35,21 +35,12 @@ Request → Static (port 443, TLS) → Dynamic (Host rule → service) → frapp
 
 ## Required `.env` variables
 
-At minimum, set these in your `.env`:
-
 ```env
-LETSENCRYPT_EMAIL=admin@example.com
+HTTP_PUBLISH_PORT=80      # optional, default 80
+HTTPS_PUBLISH_PORT=443    # optional, default 443
 ```
 
-Optional:
-
-```env
-HTTP_PUBLISH_PORT=80
-HTTPS_PUBLISH_PORT=443
-ACME_CA_SERVER=https://acme-v02.api.letsencrypt.org/directory
-```
-
-See [Environment Variables](environment-variables.md) for the full reference. **Note:** hostnames and bench ports are NOT in `.env` — they're configured in the `devops/traefik/` files (see below).
+See [Environment Variables](environment-variables.md) for the full reference. Traefik-specific settings (`email`, `caServer`, entrypoints) are configured in `devops/traefik/traefik-static.yml` (see below), not in `.env`.
 
 ## Required setup (do once per checkout)
 
@@ -59,7 +50,7 @@ See [Environment Variables](environment-variables.md) for the full reference. **
 cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
 ```
 
-Then edit the file to match your deployment. The template uses Go template syntax for env var interpolation:
+Then edit the file to match your deployment. This is a per-deployment file (gitignored), then edit directly, like `.env`:
 
 ```yaml
 entryPoints:
@@ -73,7 +64,7 @@ entryPoints:
   websecure:
     address: ":443"
   vite:
-    address: ":{{ env "VITE_PORT" | default "8080" }}"
+    address: ":8080"
 
 providers:
   file:
@@ -85,9 +76,9 @@ certificatesResolvers:
     acme:
       httpChallenge:
         entryPoint: web
-      email: {{ env "LETSENCRYPT_EMAIL" }}
+      email: dev@example.com
       storage: /letsencrypt/acme.json
-      caServer: {{ env "ACME_CA_SERVER" | default "https://acme-v02.api.letsencrypt.org/directory" }}
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
 ```
 
 **Adding/removing entrypoints:** edit this file only. No compose re-render needed — restart the proxy container to pick up static changes.
@@ -235,7 +226,7 @@ For services that need their own Traefik entrypoint (e.g., Vite dev server on po
    ```yaml
    entryPoints:
      vite:
-       address: ":{{ env "VITE_PORT" | default "8080" }}"
+       address: ":8080"
    ```
 
 2. Create a dynamic routing file:

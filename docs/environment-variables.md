@@ -53,12 +53,10 @@ Used by `templates/docker/compose.non-prod-https.yaml`.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LETSENCRYPT_EMAIL` | *(required)* | Email address for Let's Encrypt certificate notifications. Passed verbatim to the ACME resolver. |
 | `HTTP_PUBLISH_PORT` | `80` | Host port for Traefik's HTTP entrypoint. |
 | `HTTPS_PUBLISH_PORT` | `443` | Host port for Traefik's HTTPS entrypoint. |
-| `ACME_CA_SERVER` | `https://acme-v02.api.letsencrypt.org/directory` | ACME directory URL. Use the [staging URL](https://letsencrypt.org/docs/staging-environment/) (`https://acme-staging-v02.api.letsencrypt.org/directory`) while testing to avoid rate limits. |
 
-**Note:** hostnames and bench ports are NOT configured in `.env`. They're configured directly in `devops/traefik/*.yml` files — see [Traefik / HTTPS](traefik-ssl.md) for details.
+**Note:** `letsencrypt_email`, `caServer`, entrypoints, and ACME settings are configured in `devops/traefik/traefik-static.yml` (plain YAML, no templating) — see [Traefik / HTTPS](traefik-ssl.md). Hostnames and bench ports are configured in `devops/traefik/bench-XX.yml`.
 
 ## Custom image tags
 
@@ -101,10 +99,8 @@ FRAPPE_SOCKETIO_PORT_LAST=9005
 HOST_BIND=127.0.0.1
 
 # HTTPS / Traefik — only needed with compose.non-prod-https.yaml
-LETSENCRYPT_EMAIL=admin@example.com
 HTTP_PUBLISH_PORT=80
 HTTPS_PUBLISH_PORT=443
-ACME_CA_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory
 ```
 
-Hostnames and bench ports for the Traefik/HTTPS scenario are configured in `devops/traefik/` files, not `.env` — see [Traefik / HTTPS](traefik-ssl.md).
+Traefik-specific settings (`letsencrypt_email`, `caServer`, entrypoints) are configured in `devops/traefik/traefik-static.yml` — see [Traefik / HTTPS](traefik-ssl.md).

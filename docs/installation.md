@@ -108,12 +108,13 @@ docker compose \
 
 ### Remote development (HTTPS/Traefik)
 
-Requires `LETSENCRYPT_EMAIL` in `.env` and a routing configuration file `devops/traefik/bench-00.yml` (see [Traefik / HTTPS](traefik-ssl.md) for setup):
+Requires a static config file `devops/traefik/traefik-static.yml` and a routing file `devops/traefik/bench-00.yml` (see [Traefik / HTTPS](traefik-ssl.md) for setup):
 
 ```bash
-# First, create the bench routing file (required step before rendering)
+# First, create the Traefik static config and bench routing file
+cp templates/traefik/example.static.yml devops/traefik/traefik-static.yml
 cp templates/traefik/example.bench.yml devops/traefik/bench-00.yml
-# Then edit bench-00.yml with your hostname and bench ports
+# Then edit both files with your email, hostname, and ports
 
 # Then render the compose file
 docker compose \
@@ -124,6 +125,7 @@ docker compose \
   -f templates/docker/compose.non-prod-https.yaml \
   -f templates/docker/compose.uid-gid.yml \
   -f templates/docker/compose.dev.yml \
+  -f devops/compose.deploy-overrides.yml \
   config > devops/docker/dev-ssl.docker-compose.yml
 ```
 

@@ -1,29 +1,24 @@
 # Deployment-specific compose overrides.
 #
-# This file is a TEMPLATE — copy it to devops/compose.deploy-overrides.yml and customize
-# per deployment. The copy is gitignored (devops/**) and never committed.
+# This is a TEMPLATE — copy it to devops/compose.deploy-overrides.yml and edit.
+# The copy is gitignored (devops/**) and never committed.
 #
-# PURPOSE: add or override services, ports, environment variables that are specific to a
-# single deployment and do NOT belong in the tracked templates.
+# PURPOSE: publish extra host ports or override services for a single deployment.
+# All values are written directly (no templating).
+#
+# WHAT TO CHANGE MANUALLY:
+#   - ports: add any extra ports your deployment needs (e.g. Vite on 8080)
 #
 # WHEN TO USE:
 #   - Extra published ports (e.g. Vite dev server on port 8080)
-#   - Per-deployment environment variables that differ from .env defaults
-#   - Service overrides unique to one server (monitoring agents, debug tools, etc.)
+#   - Per-deployment service overrides
 #
 # WHEN NOT TO USE:
-#   - Traefik entrypoints → edit devops/traefik/traefik-static.yml (static config)
-#   - Traefik routes → edit devops/traefik/bench-XX.yml (dynamic config, hot-reloaded)
-#   - Changes that apply to ALL deployments → put them in templates/docker/compose.*.yml
-#   - UID/GID customization → use compose.uid-gid.yml + .env
+#   - Traefik entrypoints → edit devops/traefik/traefik-static.yml
+#   - Traefik routes → edit devops/traefik/bench-XX.yml (hot-reloaded)
+#   - Changes for ALL deployments → edit templates/docker/compose.*.yml
 #
-# MERGE ORDER (last wins for lists like command:, ports:):
-#   1. non.prod.compose.yml              (base)
-#   2. frappe_docker/overrides/*.yaml    (mariadb, redis)
-#   3. templates/docker/compose.*.yml    (https, uid-gid, dev, local-ports)
-#   4. devops/compose.deploy-overrides.yml ← THIS FILE (highest priority)
-#
-# USAGE:
+# COMPOSE COMMAND (add as the last -f flag):
 #   docker compose \
 #     --project-name dev-bench \
 #     -f non.prod.compose.yml \
@@ -35,19 +30,12 @@
 #     -f devops/compose.deploy-overrides.yml \
 #     config > devops/docker/dev-ssl.docker-compose.yml
 #
-# EXAMPLE — adding Vite dev server port:
+# COMPOSE MERGE RULES:
+#   - command:  REPLACED (must include full list if overriding)
+#   - ports:    APPENDED (only additions needed)
+#   - volumes:  APPENDED
 #
-#   services:
-#     proxy:
-#       ports:                          ← APPENDED (only additions needed)
-#         - "${VITE_PORT:-8080}:8080"
-#
-# NOTE: The Vite entrypoint itself is defined in devops/traefik/traefik-static.yml
-# (static config), not here. This file only publishes the port through the proxy.
-#
-# MERGE BEHAVIOR (Compose 2.x):
-#   - command:    → REPLACED (full list required in override)
-#   - ports:      → APPENDED (only additions needed)
-#   - volumes:    → APPENDED
-#   - environment:→ REPLACED per key (maps merge, lists replace)
-#   - labels:     → APPENDED
+# services:
+#   proxy:
+#     ports:
+#       - "8080:8080"
