@@ -10,10 +10,12 @@
 # (usermod, groupmod, chown, setpriv) are performed via sudo re-execution. The frappe user
 # has passwordless sudo configured in the base image (frappe_docker/images/bench/Dockerfile:102).
 # This means docker compose exec defaults to the frappe user without requiring -u frappe.
-ARG BASE_IMAGE=frappe/bench
-ARG BASE_TAG=latest
+# Upstream image to wrap. Passed as build args by templates/docker/compose.uid-gid.yml from the
+# BENCH_IMAGE/BENCH_TAG variables in .env (same names as the base compose file).
+ARG BENCH_IMAGE=frappe/bench
+ARG BENCH_TAG=latest
 
-FROM ${BASE_IMAGE}:${BASE_TAG}
+FROM ${BENCH_IMAGE}:${BENCH_TAG}
 
 # USER, HOME, and PATH are inherited from the base image (USER frappe, HOME=/home/frappe).
 # The entrypoint handles sudo env leaks (USER=root, PATH=secure_path) at runtime.

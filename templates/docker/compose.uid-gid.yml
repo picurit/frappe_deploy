@@ -1,10 +1,15 @@
+# Builds the UID/GID-remapping wrapper (images/bench/) on top of the upstream image selected by
+# BENCH_IMAGE/BENCH_TAG (same variables the base file uses to run it directly). The local image
+# name is NOT configurable: it is always `bench:${BENCH_TAG}`, so the local tag tells you which
+# upstream tag it was built from. Build it with:
+#   docker compose -f devops/docker/<rendered>.yml build
 x-customizable-image: &customizable_image
   build:
     context: images/bench
     args:
-      BASE_IMAGE: ${BASE_IMAGE:-frappe/bench}
-      BASE_TAG: ${BASE_TAG:-latest}
-  image: ${CUSTOM_IMAGE:-bench}:${CUSTOM_TAG:-latest}
+      BENCH_IMAGE: ${BENCH_IMAGE:-frappe/bench}
+      BENCH_TAG: ${BENCH_TAG:-latest}
+  image: bench:${BENCH_TAG:-latest}
 
 services:
   configurator:
