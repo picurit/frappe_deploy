@@ -21,7 +21,7 @@ Git is needed to clone the repository **and** to initialize the `frappe_docker` 
 
 ### Disk space
 
-Reserve approximately **2 GB** for the bench image layers, MariaDB image, Redis image, and the initial `bench init` dependencies (Python packages, Node modules, Frappe framework source).
+Reserve approximately **5 GB**: the `frappe/bench` image is ~2.8 GB by itself, the MariaDB and Redis images add ~0.5 GB, and each bench created by `bench init` (Python virtualenv, Node modules, Frappe source) takes ~1 GB.
 
 ## Cloning the repository
 
@@ -78,15 +78,24 @@ GROUPID=1001
 
 See [Environment Variables](environment-variables.md) for the full reference of every variable.
 
-## Building the custom bench image
+## Choosing the bench image and the Frappe version
 
-The project includes a thin wrapper image (`images/bench/`) that extends the upstream `frappe/bench` image with runtime UID/GID remapping. Build it if you need custom UID/GID support or if you want the entrypoint wrapper:
+Two `.env` variables pin the two moving parts, and both have working defaults:
+
+- `BENCH_IMAGE`/`BENCH_TAG` (default `frappe/bench:latest`) select the upstream image that ships the `bench` CLI and the Python/Node toolchain. They mean the same thing in every scenario. `PULL_POLICY` defaults to `never`: stacks that run the upstream image directly (no uid-gid override, e.g. pre-production) need a manual `docker pull frappe/bench:<tag>` before the first `up` and after every tag change. Stacks with the uid-gid override do not, because `docker compose build` fetches a missing base image on its own.
+- `FRAPPE_BRANCH` (default `version-16`) is the git ref of `frappe/frappe` that `bench init` clones: a branch for the latest release of that line (`version-16`, `version-15`), or a tag to pin one release (`v15.x.x`, `v16.x.x`). It also names the bench directory (`frappe-bench-<ref>`). `BENCH_PYTHON_VERSION=auto` uses the image's default Python, which the supported branches accept; only set it when a ref needs a different interpreter.
+
+See [Environment Variables](environment-variables.md) for details.
+
+## The custom bench image
+
+The project includes a thin wrapper image (`images/bench/`) that extends the upstream `frappe/bench` image with runtime UID/GID remapping. It is only used when `templates/docker/compose.uid-gid.yml` is part of the merge, and Docker Compose builds it for you from the rendered file, on top of the `BENCH_IMAGE:BENCH_TAG` you selected, under the fixed name `bench:<BENCH_TAG>`:
 
 ```bash
-docker build --no-cache -t bench:latest images/bench/
+docker compose -f devops/docker/dev.docker-compose.yml build
 ```
 
-If you are fine with the default UID/GID 1000:1000, you can skip this step and the Compose files will use the upstream `frappe/bench:latest` image directly.
+`up -d` also builds it automatically when the image is missing. Do not build it with a manual `docker build`, which would ignore the `.env` values. If you are fine with the default UID/GID 1000:1000, omit the uid-gid override and the Compose files will run the upstream image directly.
 
 ## Rendering a Compose file
 
@@ -146,6 +155,7 @@ docker compose \
 ## Starting the stack
 
 ```bash
+docker compose -f devops/docker/dev.docker-compose.yml build   # only with the uid-gid override; no-op otherwise
 docker compose -f devops/docker/dev.docker-compose.yml up -d
 ```
 
@@ -161,9 +171,12 @@ Once the configurator exits and the `frappe` service is running, open a shell:
 docker compose -f devops/docker/dev.docker-compose.yml exec frappe bash
 ```
 
-Inside the container, start the development server:
+Inside the container, create a site the first time (the MariaDB root password is `DB_PASSWORD`, default `123`; `--mariadb-user-host-login-scope=%` lets the site's DB user connect from the bench container), then start the development server:
 
 ```bash
+cd frappe-bench-$FRAPPE_BRANCH
+bench new-site dev.localhost --db-root-password 123 --admin-password admin --mariadb-user-host-login-scope=%   # first time only
+bench use dev.localhost
 bench start
 ```
 
@@ -172,7 +185,7 @@ The site is available at **http://localhost:8000** (or the port configured in yo
 ## Verifying the installation
 
 1. **Container health:** `docker compose -f devops/docker/dev.docker-compose.yml ps` — all services should be `Up` or `Exited 0` (configurator).
-2. **Bench version:** inside the container, run `bench version` to confirm Frappe is installed.
+2. **Versions:** inside the container, `bench version` lists the installed apps and should show the latest Frappe release of `FRAPPE_BRANCH`; `bench --version` shows the bench CLI that came with the image.
 3. **Browser:** navigate to `http://localhost:8000`. The Frappe/ERPNext setup wizard should appear.
 
 ## Troubleshooting
@@ -183,4 +196,9 @@ The site is available at **http://localhost:8000** (or the port configured in yo
 | `fatal: not a git repository: /workspace/../.git/modules/frappe_docker` | Submodule `.git` pointer leaking into the container | Ensure the volume mounts `frappe_docker/development/` (not the whole submodule) — this is already handled in `non.prod.compose.yml` |
 | All requests return 404 with HTTPS (Traefik) | Missing or misconfigured `devops/traefik/bench-00.yml` | Ensure `devops/traefik/bench-00.yml` exists (copy from `templates/traefik/example.bench.yml`) and has the correct hostname and bench ports |
 | Traefik certificate warning in browser (HTTPS) | Normal on workstations without public IP | Traefik falls back to self-signed cert; add hostname to your hosts file or use real DNS + public IP to get trusted certs |
+| Configurator exits `1` while `bench init` installs Python dependencies (a package fails to build) | The ref in `FRAPPE_BRANCH` requires a different Python than the image's default interpreter (check its `pyproject.toml` `requires-python`) | Set `BENCH_PYTHON_VERSION` in `.env` to one of the versions the image ships (`pyenv versions` inside the container), re-render the Compose file and run `up -d` again. A failed init removes its partial bench directory so the retry starts clean |
+| `frappe` container stays in `Created` with `failed to bind host port for 127.0.0.1:8000 ... address already in use` | Another process on the host (commonly a VS Code port forward, or a previous `bench start`) already listens on a port in the published 8000-8005 / 9000-9005 range | Free the port (`ss -ltnp \| grep -E ':(8000\|9000)'` shows the owner; in VS Code, remove it in the **Ports** panel) or move the range via `FRAPPE_WEB_PORT*` / `FRAPPE_SOCKETIO_PORT*` in `.env` |
 | Configurator takes a long time | First run downloads Frappe source + Python dependencies | This is normal; subsequent starts skip `bench init` if the directory already exists |
+| `No such image: frappe/bench:<tag>` on a stack without the uid-gid override (first start, or after changing `BENCH_TAG`) | `PULL_POLICY=never` (default) never downloads the image the containers run | Run `docker pull frappe/bench:<tag>` once, or set `PULL_POLICY=missing` in `.env` and re-render. Stacks with the uid-gid override are not affected: `docker compose build` fetches the base image itself |
+| Configurator runs `bench init` again after you changed `FRAPPE_BRANCH` | The bench directory is named after the ref, so a new value means a new bench | Expected. The old `frappe-bench-<old>` stays untouched next to the new one (and keeps ports 8000/9000; the new bench gets 8001/9001); delete the old directory first if you want the new bench on the default ports |
+| `bench update` says nothing to pull / HEAD is detached | `FRAPPE_BRANCH` is a tag, so the checkout is a frozen detached HEAD | Expected for pinned releases. Use a branch (`version-16`) if you want in-place updates |

@@ -14,17 +14,17 @@ Changing the UID/GID at runtime requires root privileges (for `usermod`/`groupmo
 
 A thin wrapper image (`images/bench/Dockerfile`) extends the upstream `frappe/bench` image:
 
-1. Switches back to `USER root` so the entrypoint has permission to modify users and chown files.
-2. Copies in `entrypoint.sh`, which runs at container start.
-3. The entrypoint validates `USERID`/`GROUPID`, remaps the `frappe` user, re-owns container filesystem entries, then drops privileges back to `frappe` via `setpriv`.
+1. Keeps the upstream `USER frappe`; it only adds an `ENTRYPOINT` and the two `USERID`/`GROUPID` defaults.
+2. Copies in `entrypoint.sh`, which runs at container start as `frappe` and re-executes itself as root through the passwordless `sudo` the upstream image already grants to that user.
+3. As root, the entrypoint validates `USERID`/`GROUPID`, remaps the `frappe` user, re-owns container filesystem entries, then drops privileges back to `frappe` via `setpriv`.
 
 ### Dockerfile (`images/bench/Dockerfile`)
 
 ```dockerfile
-FROM ${BASE_IMAGE}:${BASE_TAG}   # defaults to frappe/bench:latest
+ARG BENCH_IMAGE=frappe/bench     # passed by compose.uid-gid.yml from .env
+ARG BENCH_TAG=latest
+FROM ${BENCH_IMAGE}:${BENCH_TAG}
 
-USER root
-ENV HOME=/home/frappe
 ENV USERID=1000
 ENV GROUPID=1000
 
@@ -50,15 +50,12 @@ Use the UID/GID override when your host user's UID/GID is **not** 1000:1000 and 
 
 ### With custom UID/GID
 
-Set `USERID` and `GROUPID` in `.env`, build the custom image, and include the override:
+Set `USERID` and `GROUPID` in `.env`, include the override, and let Compose build the image:
 
 ```bash
 # In .env
 USERID=1001
 GROUPID=1001
-
-# Build the custom image
-docker build --no-cache -t bench:latest images/bench/
 
 # Render compose with the uid-gid override
 docker compose \
@@ -70,24 +67,27 @@ docker compose \
   -f templates/docker/compose.local-ports.yml \
   -f templates/docker/compose.dev.yml \
   config > devops/docker/dev.docker-compose.yml
+
+# Build the wrapper image from the rendered file (honours BENCH_IMAGE/BENCH_TAG from .env)
+docker compose -f devops/docker/dev.docker-compose.yml build
 ```
 
 ### Without custom UID/GID (default 1000:1000)
 
-If your host user is UID 1000, skip the custom image build and omit `templates/docker/compose.uid-gid.yml` from the merge command. The Compose files will reference the upstream `frappe/bench:latest` image directly.
+If your host user is UID 1000, omit `templates/docker/compose.uid-gid.yml` from the merge command. The Compose files will run the upstream `${BENCH_IMAGE}:${BENCH_TAG}` image (default `frappe/bench:latest`) directly, with no build step.
 
 ## How the override works
 
-The `compose.uid-gid.yml` override replaces the image reference and passes the environment variables:
+The `compose.uid-gid.yml` override adds a `build:` section that wraps the same upstream image the base file would otherwise run (`BENCH_IMAGE`/`BENCH_TAG`), fixes the local name to `bench:${BENCH_TAG}`, and passes the UID/GID variables:
 
 ```yaml
 x-customizable-image: &customizable_image
   build:
     context: images/bench
     args:
-      BASE_IMAGE: ${BASE_IMAGE:-frappe/bench}
-      BASE_TAG: ${BASE_TAG:-latest}
-  image: ${CUSTOM_IMAGE:-bench}:${CUSTOM_TAG:-latest}
+      BENCH_IMAGE: ${BENCH_IMAGE:-frappe/bench}
+      BENCH_TAG: ${BENCH_TAG:-latest}
+  image: bench:${BENCH_TAG:-latest}
 
 services:
   configurator:
@@ -102,4 +102,4 @@ services:
       GROUPID: "${GROUPID:-1000}"
 ```
 
-When this override is included, Docker builds the custom image from `images/bench/` and the entrypoint handles the remapping. When it is omitted, the base `non.prod.compose.yml` references `${CUSTOM_IMAGE:-frappe/bench}:${CUSTOM_TAG:-latest}` directly — no build step, no entrypoint wrapper.
+When this override is included, Docker Compose builds the custom image from `images/bench/` (`docker compose -f <rendered> build`, or automatically on `up`) and the entrypoint handles the remapping. When it is omitted, the base `non.prod.compose.yml` references `${BENCH_IMAGE:-frappe/bench}:${BENCH_TAG:-latest}` directly — no build step, no entrypoint wrapper. Either way the upstream image is chosen by the same two variables.

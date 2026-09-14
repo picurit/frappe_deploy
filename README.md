@@ -12,7 +12,7 @@ A custom bench image (`images/bench/`) extends the upstream `frappe/bench` image
 
 - **Docker Engine** with the Compose v2 plugin `docker compose` or the legacy `docker-compose`
 - **Git** (needed to clone the repository and initialize the `frappe_docker` submodule)
-- Approximately **2 GB of free disk** for the bench image and initial bench dependencies
+- Approximately **5 GB of free disk**: the `frappe/bench` image alone is ~2.8 GB, plus MariaDB/Redis images and ~1 GB per bench created by `bench init`
 
 ## Quick Start
 
@@ -37,11 +37,9 @@ cp example.env .env
 
 Edit `.env` to set at least `USERID` and `GROUPID` to match your host user (run `id -u` and `id -g` to find them). See [Environment Variables](docs/environment-variables.md) for the full reference.
 
-**3. Build the custom bench image (optional, only if using custom UID/GID):**
+**3. Pick the upstream bench image (optional):**
 
-```bash
-docker build --no-cache -t bench:latest images/bench/
-```
+`BENCH_IMAGE`/`BENCH_TAG` in `.env` select the upstream `frappe/bench` image (bench CLI + Python/Node toolchain) in every scenario; `FRAPPE_BRANCH` selects the `frappe/frappe` branch or tag `bench init` installs. The defaults (`frappe/bench:latest`, `version-16`) work out of the box. The custom UID/GID wrapper image is built from that same upstream image by Docker Compose itself (see step 4), so there is no separate `docker build` step.
 
 From here, pick the scenario that matches what you're setting up.
 
@@ -62,17 +60,21 @@ docker compose \
   -f templates/docker/compose.dev.yml \
   config > devops/docker/dev.docker-compose.yml
 
+docker compose -f devops/docker/dev.docker-compose.yml build   # builds bench:${BENCH_TAG} from BENCH_IMAGE:BENCH_TAG
 docker compose -f devops/docker/dev.docker-compose.yml up -d
 ```
 
-**5. Open a shell inside the bench container and start the dev server:**
+**5. Open a shell inside the bench container, create a site (first time only) and start the dev server:**
 
 ```bash
 docker compose -f devops/docker/dev.docker-compose.yml exec frappe bash
+cd frappe-bench-$FRAPPE_BRANCH
+bench new-site dev.localhost --db-root-password 123 --admin-password admin --mariadb-user-host-login-scope=%   # first time only
+bench use dev.localhost
 bench start
 ```
 
-The site is available at **http://localhost:8000**.
+The site is available at **http://localhost:8000** (login `Administrator` / `admin`).
 
 ### Scenario B: Shared remote development (cloud server, HTTPS via Traefik)
 
@@ -118,13 +120,17 @@ docker compose \
   -f templates/docker/compose.dev.yml \
   config > devops/docker/dev-ssl.docker-compose.yml
 
+docker compose -f devops/docker/dev-ssl.docker-compose.yml build
 docker compose -f devops/docker/dev-ssl.docker-compose.yml up -d
 ```
 
-**7. Open a shell inside the bench container and start the dev server:**
+**7. Open a shell inside the bench container, create a site (first time only) and start the dev server:**
 
 ```bash
 docker compose -f devops/docker/dev-ssl.docker-compose.yml exec frappe bash
+cd frappe-bench-$FRAPPE_BRANCH
+bench new-site dev.example.com --db-root-password 123 --admin-password admin --mariadb-user-host-login-scope=%   # first time only
+bench use dev.example.com
 bench start
 ```
 

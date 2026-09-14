@@ -18,7 +18,7 @@ frappe_deploy/
 │   │   ├── compose.dev.yml             # Development restart policy (restart: no)
 │   │   ├── compose.pre.yml             # Pre-production restart policy (restart: on-failure)
 │   │   ├── compose.local-ports.yml     # Publishes bench ports to the host (opt-in)
-│   │   ├── compose.uid-gid.yml         # Builds the custom bench image + sets USERID/GROUPID
+│   │   ├── compose.uid-gid.yml         # Builds bench:${BENCH_TAG} on top of the upstream image + sets USERID/GROUPID
 │   │   ├── compose.non-prod-https.yaml # Traefik proxy + TLS (configfile approach)
 │   │   └── compose.deploy-overrides.yml # Template for deployment-specific overrides
 │   └── traefik/
@@ -52,7 +52,7 @@ Docker Compose supports merging multiple `-f` files. Later files override or ext
 non.prod.compose.yml                             ← base (services, volumes, workspace)
   + frappe_docker/overrides/compose.mariadb.yaml  ← adds MariaDB
   + frappe_docker/overrides/compose.redis.yaml    ← adds Redis
-  + templates/docker/compose.uid-gid.yml          ← builds custom image, sets USERID/GROUPID
+  + templates/docker/compose.uid-gid.yml          ← builds bench:${BENCH_TAG} from BENCH_IMAGE:BENCH_TAG, sets USERID/GROUPID
   + templates/docker/compose.local-ports.yml      ← publishes host ports
   + templates/docker/compose.dev.yml              ← sets restart policy
   ────────────────────────────────────────────────
@@ -101,12 +101,13 @@ Request → Static (port 443, TLS) → Dynamic (Host rule → service) → frapp
 
 A one-shot service that runs `bench init` on the first boot. It:
 
-1. Checks if the bench directory (`frappe-bench-X.Y.Z`) already exists.
-2. If not, runs `bench init` to clone Frappe and set up the Python virtualenv.
-3. Configures `db_host`, `redis_cache`, `redis_queue`, and `redis_socketio` via `bench set-config`.
-4. Exits.
+1. Derives the bench directory name from `FRAPPE_BRANCH`: `frappe-bench-${FRAPPE_BRANCH}` (e.g. `frappe-bench-version-16`), and checks whether it already exists.
+2. If not, runs `bench init --frappe-branch ${FRAPPE_BRANCH}`, using the Python selected by `BENCH_PYTHON_VERSION` (`auto` → the image's default interpreter) to create the virtualenv.
+3. If `bench init` fails, removes the partial directory and exits `1`, so the next start retries from scratch instead of skipping a broken bench.
+4. Configures `db_host`, `redis_cache`, `redis_queue`, and `redis_socketio` via `bench set-config`.
+5. Exits.
 
-On subsequent boots, if the directory already exists, the configurator exits immediately.
+On subsequent boots, if the directory already exists, the configurator exits immediately. Changing `FRAPPE_BRANCH` therefore creates a new bench next to the existing one.
 
 ### `frappe`
 
