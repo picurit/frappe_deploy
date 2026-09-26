@@ -1,0 +1,42 @@
+[
+  {
+    "id": "cache",
+    "type": "choose",
+    "title": "Redis",
+    "question": "Where do Redis cache and queue run?",
+    "default": "redis",
+    "options": [
+      {
+        "id": "redis",
+        "label": "In this stack",
+        "description": "redis-cache and redis-queue services",
+        "compose": { "cache": ["frappe_docker/overrides/compose.redis.yaml"] }
+      },
+      {
+        "id": "external",
+        "label": "External servers",
+        "description": "Existing Redis instances reachable from the containers"
+      }
+    ]
+  },
+  {
+    "id": "redis-cache",
+    "type": "input",
+    "title": "Redis cache",
+    "question": "Redis cache address (host:port)",
+    "env": "REDIS_CACHE",
+    "pattern": "^[A-Za-z0-9._-]+:[0-9]{1,5}$",
+    "error": "Use host:port",
+    "when": { "cache": ["external"] }
+  },
+  {
+    "id": "redis-queue",
+    "type": "input",
+    "title": "Redis queue",
+    "question": "Redis queue address (host:port)",
+    "env": "REDIS_QUEUE",
+    "pattern": "^[A-Za-z0-9._-]+:[0-9]{1,5}$",
+    "error": "Use host:port",
+    "when": { "cache": ["external"] }
+  }
+]

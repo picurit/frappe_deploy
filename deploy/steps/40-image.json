@@ -1,0 +1,59 @@
+[
+  {
+    "id": "bench-image",
+    "type": "choose",
+    "title": "Bench image",
+    "question": "How should the bench image run?",
+    "default": "uid-gid",
+    "when": { "environment": ["!prod"] },
+    "options": [
+      {
+        "id": "uid-gid",
+        "label": "Remapped to your user",
+        "description": "Builds bench:$BENCH_TAG so bind-mounted files belong to USERID/GROUPID",
+        "compose": { "image": ["templates/docker/compose.uid-gid.yml"] },
+        "notes": ["Build the wrapper image after changing BENCH_TAG: docker compose -f {output} build"]
+      },
+      {
+        "id": "upstream",
+        "label": "Upstream as-is",
+        "description": "Runs $BENCH_IMAGE:$BENCH_TAG directly (files owned by 1000:1000)"
+      }
+    ]
+  },
+  {
+    "id": "frappe-branch",
+    "type": "input",
+    "title": "Frappe branch",
+    "question": "Frappe branch or tag for bench init",
+    "help": "A branch (version-16, develop) can be updated later; a tag (v16.x.x) pins a release. A new value creates a new bench next to the old one.",
+    "default": "version-16",
+    "env": "FRAPPE_BRANCH",
+    "pattern": "^[A-Za-z0-9._/-]+$",
+    "error": "Letters, digits, . _ / - only",
+    "when": { "environment": ["!prod"] }
+  },
+  {
+    "id": "app-image",
+    "type": "input",
+    "title": "App image",
+    "question": "Application image (with your apps built in)",
+    "help": "frappe/erpnext ships frappe + erpnext. For other apps build your own image (frappe_docker/docs/02-setup/02-build-setup.md).",
+    "default": "frappe/erpnext",
+    "env": "CUSTOM_IMAGE",
+    "pattern": "^[a-z0-9][a-z0-9._/:-]*$",
+    "error": "Not a valid image name",
+    "when": { "environment": ["prod"] }
+  },
+  {
+    "id": "app-tag",
+    "type": "input",
+    "title": "App image tag",
+    "question": "Image tag",
+    "default": "v16.26.2",
+    "env": "CUSTOM_TAG",
+    "pattern": "^[A-Za-z0-9._-]+$",
+    "error": "Not a valid tag",
+    "when": { "environment": ["prod"] }
+  }
+]

@@ -1,0 +1,73 @@
+[
+  {
+    "id": "database",
+    "type": "choose",
+    "title": "Database",
+    "question": "Which database engine?",
+    "default": "mariadb",
+    "options": [
+      {
+        "id": "mariadb",
+        "label": "MariaDB",
+        "description": "Recommended; runs as the db service",
+        "compose": { "database": ["frappe_docker/overrides/compose.mariadb.yaml"] },
+        "notes": ["MariaDB runs in its own container: bench new-site needs --mariadb-user-host-login-scope=%"]
+      },
+      {
+        "id": "postgres",
+        "label": "PostgreSQL",
+        "description": "Runs as the db service; not every Frappe app supports it",
+        "compose": { "database": ["frappe_docker/overrides/compose.postgres.yaml"] },
+        "notes": ["PostgreSQL: bench new-site needs --db-type postgres"]
+      },
+      {
+        "id": "external",
+        "label": "External server",
+        "description": "An existing MariaDB/PostgreSQL reachable from the containers"
+      }
+    ]
+  },
+  {
+    "id": "db-password",
+    "type": "secret",
+    "title": "DB root password",
+    "question": "Database root password",
+    "help": "Development default: 123",
+    "default": "123",
+    "env": "DB_PASSWORD",
+    "pattern": "^.+$",
+    "error": "The password can't be empty",
+    "when": { "environment": ["!prod"], "database": ["mariadb", "postgres"] }
+  },
+  {
+    "id": "db-password-prod",
+    "type": "secret",
+    "title": "DB root password",
+    "question": "Database root password (at least 12 characters)",
+    "env": "DB_PASSWORD",
+    "pattern": "^.{12,}$",
+    "error": "Use at least 12 characters in production",
+    "when": { "environment": ["prod"], "database": ["mariadb", "postgres"] }
+  },
+  {
+    "id": "db-host",
+    "type": "input",
+    "title": "DB host",
+    "question": "Database host (as seen from the containers)",
+    "env": "DB_HOST",
+    "pattern": "^[A-Za-z0-9._-]+$",
+    "error": "Enter a hostname or IP address",
+    "when": { "database": ["external"] }
+  },
+  {
+    "id": "db-port",
+    "type": "input",
+    "title": "DB port",
+    "question": "Database port",
+    "default": "3306",
+    "env": "DB_PORT",
+    "pattern": "^[0-9]{1,5}$",
+    "error": "Enter a port number",
+    "when": { "database": ["external"] }
+  }
+]

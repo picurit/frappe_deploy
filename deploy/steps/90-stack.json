@@ -1,0 +1,9 @@
+{
+  "id": "stack",
+  "type": "input",
+  "title": "Stack name",
+  "question": "Stack name (compose project and file names)",
+  "default": "{environment}",
+  "pattern": "^[a-z0-9][a-z0-9_-]*$",
+  "error": "Lowercase letters, digits, - and _ (starting with a letter or digit)"
+}

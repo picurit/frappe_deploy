@@ -1,0 +1,46 @@
+[
+  {
+    "id": "extras",
+    "type": "multi",
+    "title": "Extras",
+    "question": "Optional additions (space to toggle, enter to continue)",
+    "default": [],
+    "options": [
+      {
+        "id": "backup-cron",
+        "label": "Scheduled backups",
+        "description": "Ofelia job running bench backup on a schedule",
+        "when": { "environment": ["prod"] },
+        "compose": { "extras": ["frappe_docker/overrides/compose.backup-cron.yaml"] }
+      },
+      {
+        "id": "migrator",
+        "label": "Migrate on start",
+        "description": "Runs bench --site all migrate at every start",
+        "when": { "environment": ["prod"] },
+        "compose": { "extras": ["frappe_docker/overrides/compose.migrator.yaml"] }
+      },
+      {
+        "id": "deploy-overrides",
+        "label": "Local overrides file",
+        "description": "devops/compose.deploy-overrides.yml (gitignored): extra ports, mounts...",
+        "compose": { "overrides": ["devops/compose.deploy-overrides.yml"] },
+        "files": [
+          { "from": "templates/docker/compose.deploy-overrides.yml", "to": "devops/compose.deploy-overrides.yml" }
+        ],
+        "notes": ["Your own additions go in devops/compose.deploy-overrides.yml; re-render after editing it"]
+      }
+    ]
+  },
+  {
+    "id": "backup-schedule",
+    "type": "input",
+    "title": "Backup schedule",
+    "question": "Backup schedule (Ofelia syntax)",
+    "default": "@every 6h",
+    "env": "BACKUP_CRONSTRING",
+    "pattern": "^.+$",
+    "error": "The schedule can't be empty",
+    "when": { "extras": ["backup-cron"] }
+  }
+]

@@ -1,0 +1,111 @@
+[
+  {
+    "id": "proxy",
+    "type": "choose",
+    "title": "Access",
+    "question": "How is the site reached?",
+    "default": "local-ports",
+    "options": [
+      {
+        "id": "local-ports",
+        "label": "Ports on this host",
+        "description": "Bench 8000-8005 / socketio 9000-9005 on HOST_BIND (127.0.0.1)",
+        "when": { "environment": ["dev-local", "pre"] },
+        "compose": { "ports": ["templates/docker/compose.local-ports.yml"] }
+      },
+      {
+        "id": "traefik-file",
+        "label": "Traefik HTTPS (file routes)",
+        "description": "Routes in devops/traefik/*.yml, hot-reloaded; no Docker socket",
+        "when": { "environment": ["dev-ssl", "pre"] },
+        "compose": { "proxy": ["templates/docker/compose.non-prod-https.yaml"] },
+        "files": [
+          { "from": "templates/traefik/example.static.yml", "to": "devops/traefik-static.yml" },
+          { "from": "templates/traefik/example.bench.yml", "to": "devops/traefik/bench-00.yml" }
+        ],
+        "notes": [
+          "Set your email in devops/traefik-static.yml (restart the proxy after changes)",
+          "Set hostname and bench ports in devops/traefik/bench-00.yml (hot-reloaded)"
+        ]
+      },
+      {
+        "id": "internal",
+        "label": "Docker network only",
+        "description": "Nothing published; reach it from other containers",
+        "when": { "environment": ["dev-local", "pre"] }
+      },
+      {
+        "id": "noproxy",
+        "label": "Direct on :8080",
+        "description": "No reverse proxy; put your own in front",
+        "when": { "environment": ["prod"] },
+        "compose": { "proxy": ["frappe_docker/overrides/compose.noproxy.yaml"] }
+      },
+      {
+        "id": "traefik-http",
+        "label": "Traefik HTTP",
+        "description": "Traefik on :80",
+        "when": { "environment": ["prod"] },
+        "compose": { "proxy": ["frappe_docker/overrides/compose.proxy.yaml"] }
+      },
+      {
+        "id": "traefik-https",
+        "label": "Traefik HTTPS",
+        "description": "Traefik on :443 with Let's Encrypt",
+        "when": { "environment": ["prod"] },
+        "compose": { "proxy": ["frappe_docker/overrides/compose.https.yaml"] }
+      },
+      {
+        "id": "nginx-proxy",
+        "label": "nginx-proxy HTTP",
+        "description": "nginx-proxy on :80",
+        "when": { "environment": ["prod"] },
+        "compose": { "proxy": ["frappe_docker/overrides/compose.nginxproxy.yaml"] }
+      },
+      {
+        "id": "nginx-proxy-ssl",
+        "label": "nginx-proxy HTTPS",
+        "description": "nginx-proxy + acme-companion on :443",
+        "when": { "environment": ["prod"] },
+        "compose": {
+          "proxy": [
+            "frappe_docker/overrides/compose.nginxproxy.yaml",
+            "frappe_docker/overrides/compose.nginxproxy-ssl.yaml"
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "id": "sites-rule",
+    "type": "input",
+    "title": "Traefik rule",
+    "question": "Traefik router rule for your sites",
+    "default": "Host(`erp.example.com`)",
+    "env": "SITES_RULE",
+    "pattern": "^Host\\(.+\\)",
+    "error": "Use Host(`domain`) or Host(`a.com`) || Host(`b.com`)",
+    "when": { "proxy": ["traefik-https"] }
+  },
+  {
+    "id": "nginx-hosts",
+    "type": "input",
+    "title": "Hostnames",
+    "question": "Hostnames served (comma-separated)",
+    "default": "erp.example.com",
+    "env": "NGINX_PROXY_HOSTS",
+    "pattern": "^[A-Za-z0-9.-]+(,[A-Za-z0-9.-]+)*$",
+    "error": "Comma-separated hostnames, no spaces",
+    "when": { "proxy": ["nginx-proxy", "nginx-proxy-ssl"] }
+  },
+  {
+    "id": "letsencrypt-email",
+    "type": "input",
+    "title": "Let's Encrypt email",
+    "question": "Email for Let's Encrypt expiry notices",
+    "env": "LETSENCRYPT_EMAIL",
+    "pattern": "^[^@ ]+@[^@ ]+\\.[^@ ]+$",
+    "error": "Enter a valid email address",
+    "when": { "proxy": ["traefik-https", "nginx-proxy-ssl"] }
+  }
+]

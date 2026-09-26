@@ -1,0 +1,23 @@
+{
+  "title": "frappe_deploy",
+  "subtitle": "Compose stack wizard",
+
+  "layers": ["base", "database", "cache", "proxy", "image", "ports", "runtime", "extras", "overrides"],
+
+  "env_files": [".env"],
+  "files": [
+    { "from": "example.env", "to": ".env" }
+  ],
+
+  "stack": {
+    "project": "{stack}",
+    "output": "devops/docker/{stack}.docker-compose.yml",
+    "env_file": "devops/stacks/{stack}.env",
+    "answers": "devops/stacks/{stack}.json"
+  },
+
+  "notes": [
+    "Status: docker compose -f {output} ps",
+    "Stop:   docker compose -f {output} down"
+  ]
+}

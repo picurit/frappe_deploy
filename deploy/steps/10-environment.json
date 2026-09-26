@@ -1,0 +1,61 @@
+{
+  "id": "environment",
+  "type": "choose",
+  "title": "Environment",
+  "question": "Which environment is this stack for?",
+  "default": "dev-local",
+  "options": [
+    {
+      "id": "dev-local",
+      "label": "Local development",
+      "description": "Bench container, bench start on this machine, no TLS",
+      "compose": {
+        "base": ["non.prod.compose.yml"],
+        "runtime": ["templates/docker/compose.dev.yml"]
+      },
+      "notes": [
+        "First start runs bench init: docker compose -f {output} logs -f configurator",
+        "Then: docker compose -f {output} exec frappe bash, cd frappe-bench-$FRAPPE_BRANCH, bench new-site ..., bench start"
+      ]
+    },
+    {
+      "id": "dev-ssl",
+      "label": "Remote development (HTTPS)",
+      "description": "Shared dev server behind Traefik with Let's Encrypt",
+      "compose": {
+        "base": ["non.prod.compose.yml"],
+        "runtime": ["templates/docker/compose.dev.yml"]
+      },
+      "notes": [
+        "First start runs bench init: docker compose -f {output} logs -f configurator",
+        "Then: docker compose -f {output} exec frappe bash, cd frappe-bench-$FRAPPE_BRANCH, bench new-site ..., bench start"
+      ]
+    },
+    {
+      "id": "pre",
+      "label": "Pre-production",
+      "description": "Bench container that restarts on failure",
+      "compose": {
+        "base": ["non.prod.compose.yml"],
+        "runtime": ["templates/docker/compose.pre.yml"]
+      },
+      "notes": [
+        "Shell into the bench: docker compose -f {output} exec frappe bash"
+      ]
+    },
+    {
+      "id": "prod",
+      "label": "Production",
+      "description": "Immutable image (frappe_docker compose.yaml): backend, workers, scheduler",
+      "compose": {
+        "base": ["frappe_docker/compose.yaml"]
+      },
+      "env": {
+        "PULL_POLICY": "missing"
+      },
+      "notes": [
+        "Create a site: docker compose -f {output} exec backend bench new-site <site> --admin-password <password> --install-app erpnext"
+      ]
+    }
+  ]
+}
